@@ -1,223 +1,4 @@
-# Function to generate enhanced comparison text with proportion analysis - updated for new data structure
-def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old, income_new, date1, date2, 
-                                            filter_var, filter_values, group_var, df1, df2):
-    """Generate comprehensive comparison analysis text including proportion changes"""
-    
-    # Helper function to determine change type and generate sentence
-    def create_change_sentence(variable, old_val, new_val, date1, date2):
-        if abs((new_val - old_val) / old_val) < 0.01 if old_val != 0 else abs(new_val) < 0.01:
-            change_type = "remained essentially equal"
-            relative_change = 0
-        elif new_val > old_val:
-            change_type = "increased"
-            relative_change = ((new_val - old_val) / old_val * 100) if old_val != 0 else 100
-        else:
-            change_type = "decreased"
-            relative_change = ((new_val - old_val) / old_val * 100) if old_val != 0 else -100
-        
-        if change_type == "remained essentially equal":
-            return f"{variable} amount was {old_val:.1f} in {date1.strftime('%Y-%m')} and {change_type} at {new_val:.1f} in {date2.strftime('%Y-%m')}."
-        else:
-            return f"{variable} amount was {old_val:.1f} in {date1.strftime('%Y-%m')} and {change_type} to {new_val:.1f} in {date2.strftime('%Y-%m')}, which corresponds to a relative {change_type.replace('increased', 'increase').replace('decreased', 'decrease')} of {abs(relative_change):.1f}%."
-    
-    # Build the text
-    text_parts = []
-    
-    # Add filter information if applied
-    if filter_var != "none" and filter_values:
-        filter_text = f"Analysis filtered by {filter_var}: {', '.join(filter_values)}.\n\n"
-        text_parts.append(filter_text)
-    
-    # Add comparison header
-    text_parts.append("COMPARISON ANALYSIS:\n")
-    text_parts.append("=" * 30 + "\n\n")
-    
-    # Generate sentences for Amount and Income
-    amount_sentence = create_change_sentence("Amount Total", amount_old, amount_new, date1, date2)
-    income_sentence = create_change_sentence("Income Total", income_old, income_new, date1, date2)
-    
-    text_parts.append(amount_sentence + "\n\n")
-    text_parts.append(income_sentence + "\n\n")
-    
-    # Add ratio analysis
-    ratio_old = (amount_old / income_old) if income_old != 0 else 0
-    ratio_new = (amount_new / income_new) if income_new != 0 else 0
-    ratio_change = ratio_new - ratio_old
-    
-    if abs(ratio_change) < 0.01:
-        ratio_text = f"The Amount/Income ratio remained stable at approximately {ratio_old:.2f}."
-    elif ratio_change > 0:
-        ratio_text = f"The Amount/Income ratio improved from {ratio_old:.2f} to {ratio_new:.2f}, representing an increase of {ratio_change:.2f}."
-    else:
-        ratio_text = f"The Amount/Income ratio declined from {ratio_old:.2f} to {ratio_new:.2f}, representing a decrease of {abs(ratio_change):.2f}."
-    
-    text_parts.append(ratio_text + "\n\n")
-    
-    # Add proportion analysis if grouping is selected
-    if group_var != "none" and group_var in ['Division', 'Type', 'Item', 'Function'] and not df1.empty and not df2.empty:
-        text_parts.append("PROPORTION ANALYSIS BY GROUPS:\n")
-        text_parts.append("=" * 30 + "\n\n")
-        
-        # Analyze Amount proportions
-        amount_groups1 = df1.groupby(group_var)['Amount_total'].sum()
-        amount_total1 = df1['Amount_total'].sum()
-        amount_props1 = (amount_groups1 / amount_total1 * 100) if amount_total1 > 0 else pd.Series(dtype=float)
-        
-        amount_groups2 = df2.groupby(group_var)['Amount_total'].sum()
-        amount_total2 = df2['Amount_total'].sum()
-        amount_props2 = (amount_groups2 / amount_total2 * 100) if amount_total2 > 0 else pd.Series(dtype=float)
-        
-        text_parts.append("Amount Total Proportion Changes:\n")
-        all_groups = set(amount_props1.index) | set(amount_props2.index)
-        for group in sorted(all_groups):
-            prop1 = amount_props1.get(group, 0)
-            prop2 = amount_props2.get(group, 0)
-            amount1 = amount_groups1.get(group, 0)
-            amount2 = amount_groups2.get(group, 0)
-            prop_change = prop2 - prop1
-            
-            change_desc = "increased" if prop_change > 0 else "decreased" if prop_change < 0 else "remained stable"
-            text_parts.append(f"• {group}: {prop1:.1f}% → {prop2:.1f}% ({change_desc} by {abs(prop_change):.1f}pp), amounts: {amount1:.1f} → {amount2:.1f}\n")
-        
-        text_parts.append("\n")
-        
-        # Analyze Income proportions
-        income_groups1 = df1.groupby(group_var)['Income_total'].sum()
-        income_total1 = df1['Income_total'].sum()
-        income_props1 = (income_groups1 / income_total1 * 100) if income_total1 > 0 else pd.Series(dtype=float)
-        
-        income_groups2 = df2.groupby(group_var)['Income_total'].sum()
-        income_total2 = df2['Income_total'].sum()
-        income_props2 = (income_groups2 / income_total2 * 100) if income_total2 > 0 else pd.Series(dtype=float)
-        
-        text_parts.append("Income Total Proportion Changes:\n")
-        all_groups = set(income_props1.index) | set(income_props2.index)
-        for group in sorted(all_groups):
-            prop1 = income_props1.get(group, 0)
-            prop2 = income_props2.get(group, 0)
-            amount1 = income_groups1.get(group, 0)
-            amount2 = income_groups2.get(group, 0)
-            prop_change = prop2 - prop1
-            
-            change_desc = "increased" if prop_change > 0 else "decreased" if prop_change < 0 else "remained stable"
-            text_parts.append(f"• {group}: {prop1:.1f}% → {prop2:.1f}% ({change_desc} by {abs(prop_change):.1f}pp), amounts: {amount1:.1f} → {amount2:.1f}\n")
-        
-        text_parts.append("\n")
-    
-    # Add summary section
-    text_parts.append("SUMMARY:\n")
-    text_parts.append("=" * 30 + "\n")
-    text_parts.append("• [Add your key insights here]\n")
-    text_parts.append("• [Note any significant patterns]\n")
-    text_parts.append("• [Record actionable findings]")
-    
-    return "".join(text_parts)# Callback for the amount vs income chart
-@callback(
-    Output("amount-income-chart", "figure"),
-    [Input("year-range-slider", "value"),
-     Input("filter-selector", "value"),
-     Input("filter-values-selector", "value"),
-     Input("group-selector", "value")]
-)
-def update_amount_income_chart(year_range, filter_var, filter_values, group_var):
-    # Create a copy of the data for processing
-    df = sample_data.copy()
-    
-    # Filter by year range
-    df = df[(df['date'].dt.year >= year_range[0]) & (df['date'].dt.year <= year_range[1])]
-    
-    # Apply filtering if selected
-    if filter_var != "none" and filter_var in df.columns and filter_values:
-        df = df[df[filter_var].isin(filter_values)]
-    
-    # Prepare data for plotting
-    df['month'] = df['date'].dt.to_period('M').astype(str)
-    
-    # Create figure with secondary y-axis
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-    
-    if group_var != "none" and group_var in df.columns:
-        # Create grouped line chart
-        if group_var in ['Division', 'Type', 'Item', 'Function']:
-            for category in sorted(df[group_var].unique()):
-                category_data = df[df[group_var] == category]
-                monthly_data = category_data.groupby('month').agg({
-                    'Amount_total': 'sum',
-                    'Income_total': 'sum'
-                }).reset_index()
-                
-                # Add Amount traces
-                fig.add_trace(
-                    go.Scatter(
-                        x=monthly_data['month'],
-                        y=monthly_data['Amount_total'],
-                        mode='lines+markers',
-                        name=f"Amount - {category}",
-                        line=dict(width=2, dash='solid'),
-                        marker=dict(size=6)
-                    ),
-                    secondary_y=False
-                )
-                
-                # Add Income traces
-                fig.add_trace(
-                    go.Scatter(
-                        x=monthly_data['month'],
-                        y=monthly_data['Income_total'],
-                        mode='lines+markers',
-                        name=f"Income - {category}",
-                        line=dict(width=2, dash='dash'),
-                        marker=dict(size=6, symbol='diamond')
-                    ),
-                    secondary_y=True
-                )
-    else:
-        # Create simple line chart
-        monthly_data = df.groupby('month').agg({
-            'Amount_total': 'sum',
-            'Income_total': 'sum'
-        }).reset_index()
-        
-        fig.add_trace(
-            go.Scatter(
-                x=monthly_data['month'],
-                y=monthly_data['Amount_total'],
-                mode='lines+markers',
-                name='Amount Total',
-                line=dict(color='#1f77b4', width=3),
-                marker=dict(size=8)
-            ),
-            secondary_y=False
-        )
-        
-        fig.add_trace(
-            go.Scatter(
-                x=monthly_data['month'],
-                y=monthly_data['Income_total'],
-                mode='lines+markers',
-                name='Income Total',
-                line=dict(color='#ff7f0e', width=3),
-                marker=dict(size=8, symbol='diamond')
-            ),
-            secondary_y=True
-        )
-    
-    # Update axes labels
-    fig.update_xaxes(title_text="Month", tickangle=45)
-    fig.update_yaxes(title_text="Amount Total", secondary_y=False)
-    fig.update_yaxes(title_text="Income Total", secondary_y=True)
-    
-    # Update layout
-    fig.update_layout(
-        title="Amount vs Income Trends",
-        template="plotly_white",
-        height=300,
-        margin=dict(l=50, r=50, t=40, b=50),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
-    )
-    
-    return figimport dash
+import dash
 from dash import dcc, html, Input, Output, callback, State
 import dash_mantine_components as dmc
 from dash_iconify import DashIconify
@@ -233,7 +14,7 @@ app = dash.Dash(__name__)
 
 # Load data from CSV file
 try:
-    sample_data = pd.read_csv('Example_df.csv')
+    sample_data = pd.read_csv(r'C:\Users\srizz\Documents\GitHub\Dashboard_py\Dashboard_py\Example_df.csv')
     
     # Convert Date column to proper datetime format (from "2020-03" to datetime)
     sample_data['Date'] = pd.to_datetime(sample_data['Date'], format='%Y-%m')
@@ -276,6 +57,240 @@ max_year = sample_data['date'].dt.year.max()
 
 # Create year range marks for the slider
 year_marks = {year: {'label': str(year)} for year in range(min_year, max_year + 1)}
+
+# Helper Functions (defined before layout)
+def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old, income_new, date1, date2, 
+                                            filter_var, filter_values, group_var, df1, df2, selected_type, amount_col, income_col):
+    """Generate comprehensive comparison analysis text including proportion changes"""
+    
+    def create_change_sentence(variable, old_val, new_val, date1, date2):
+        if abs((new_val - old_val) / old_val) < 0.01 if old_val != 0 else abs(new_val) < 0.01:
+            change_type = "remained essentially equal"
+            relative_change = 0
+        elif new_val > old_val:
+            change_type = "increased"
+            relative_change = ((new_val - old_val) / old_val * 100) if old_val != 0 else 100
+        else:
+            change_type = "decreased"
+            relative_change = ((new_val - old_val) / old_val * 100) if old_val != 0 else -100
+        
+        if change_type == "remained essentially equal":
+            return f"{variable} amount was {old_val:.1f} in {date1.strftime('%Y-%m')} and {change_type} at {new_val:.1f} in {date2.strftime('%Y-%m')}."
+        else:
+            return f"{variable} amount was {old_val:.1f} in {date1.strftime('%Y-%m')} and {change_type} to {new_val:.1f} in {date2.strftime('%Y-%m')}, which corresponds to a relative {change_type.replace('increased', 'increase').replace('decreased', 'decrease')} of {abs(relative_change):.1f}%."
+    
+    text_parts = []
+    text_parts.append(f"COMPARISON ANALYSIS - {selected_type}:\n")
+    text_parts.append("=" * 30 + "\n\n")
+    
+    if filter_var != "none" and filter_values:
+        filter_text = f"Analysis filtered by {filter_var}: {', '.join(filter_values)}.\n\n"
+        text_parts.append(filter_text)
+    
+    amount_sentence = create_change_sentence(f"Amount ({selected_type})", amount_old, amount_new, date1, date2)
+    income_sentence = create_change_sentence(f"Income ({selected_type})", income_old, income_new, date1, date2)
+    
+    text_parts.append(amount_sentence + "\n\n")
+    text_parts.append(income_sentence + "\n\n")
+    
+    ratio_old = (income_old / amount_old) if amount_old != 0 else 0
+    ratio_new = (income_new / amount_new) if amount_new != 0 else 0
+    ratio_change = ratio_new - ratio_old
+    
+    if abs(ratio_change) < 0.01:
+        ratio_text = f"The Return Ratio (Income/Amount) remained stable at approximately {ratio_old:.2f}."
+    elif ratio_change > 0:
+        ratio_text = f"The Return Ratio (Income/Amount) improved from {ratio_old:.2f} to {ratio_new:.2f}, representing an increase of {ratio_change:.2f}."
+    else:
+        ratio_text = f"The Return Ratio (Income/Amount) declined from {ratio_old:.2f} to {ratio_new:.2f}, representing a decrease of {abs(ratio_change):.2f}."
+    
+    text_parts.append(ratio_text + "\n\n")
+    
+    if group_var != "none" and group_var in ['Division', 'Type', 'Item', 'Function'] and not df1.empty and not df2.empty:
+        text_parts.append("PROPORTION ANALYSIS BY GROUPS:\n")
+        text_parts.append("=" * 30 + "\n\n")
+        
+        amount_groups1 = df1.groupby(group_var)[amount_col].sum()
+        amount_total1 = df1[amount_col].sum()
+        amount_props1 = (amount_groups1 / amount_total1 * 100) if amount_total1 > 0 else pd.Series(dtype=float)
+        
+        amount_groups2 = df2.groupby(group_var)[amount_col].sum()
+        amount_total2 = df2[amount_col].sum()
+        amount_props2 = (amount_groups2 / amount_total2 * 100) if amount_total2 > 0 else pd.Series(dtype=float)
+        
+        text_parts.append(f"Amount ({selected_type}) Proportion Changes:\n")
+        all_groups = set(amount_props1.index) | set(amount_props2.index)
+        for group in sorted(all_groups):
+            prop1 = amount_props1.get(group, 0)
+            prop2 = amount_props2.get(group, 0)
+            amount1 = amount_groups1.get(group, 0)
+            amount2 = amount_groups2.get(group, 0)
+            prop_change = prop2 - prop1
+            
+            change_desc = "increased" if prop_change > 0 else "decreased" if prop_change < 0 else "remained stable"
+            text_parts.append(f"• {group}: {prop1:.1f}% → {prop2:.1f}% ({change_desc} by {abs(prop_change):.1f}pp), amounts: {amount1:.1f} → {amount2:.1f}\n")
+        
+        text_parts.append("\n")
+        
+        income_groups1 = df1.groupby(group_var)[income_col].sum()
+        income_total1 = df1[income_col].sum()
+        income_props1 = (income_groups1 / income_total1 * 100) if income_total1 > 0 else pd.Series(dtype=float)
+        
+        income_groups2 = df2.groupby(group_var)[income_col].sum()
+        income_total2 = df2[income_col].sum()
+        income_props2 = (income_groups2 / income_total2 * 100) if income_total2 > 0 else pd.Series(dtype=float)
+        
+        text_parts.append(f"Income ({selected_type}) Proportion Changes:\n")
+        all_groups = set(income_props1.index) | set(income_props2.index)
+        for group in sorted(all_groups):
+            prop1 = income_props1.get(group, 0)
+            prop2 = income_props2.get(group, 0)
+            amount1 = income_groups1.get(group, 0)
+            amount2 = income_groups2.get(group, 0)
+            prop_change = prop2 - prop1
+            
+            change_desc = "increased" if prop_change > 0 else "decreased" if prop_change < 0 else "remained stable"
+            text_parts.append(f"• {group}: {prop1:.1f}% → {prop2:.1f}% ({change_desc} by {abs(prop_change):.1f}pp), amounts: {amount1:.1f} → {amount2:.1f}\n")
+        
+        text_parts.append("\n")
+    
+    text_parts.append("SUMMARY:\n")
+    text_parts.append("=" * 30 + "\n")
+    text_parts.append("• [Add your key insights here]\n")
+    text_parts.append("• [Note any significant patterns]\n")
+    text_parts.append("• [Record actionable findings]")
+    
+    return "".join(text_parts)
+
+def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, selected_type, var_label):
+    """Create a dumbbell chart showing proportion changes between two dates"""
+    if group_var == "none":
+        fig = go.Figure()
+        fig.add_annotation(
+            text="Select a grouping variable to see proportion analysis",
+            xref="paper", yref="paper", x=0.5, y=0.5,
+            xanchor='center', yanchor='middle', showarrow=False,
+            font=dict(size=14, color="gray")
+        )
+        fig.update_layout(
+            title=f"{var_label} Proportions - {selected_type}",
+            template="plotly_white",
+            height=350
+        )
+        return fig
+    
+    if not df1.empty:
+        group1_data = df1.groupby(group_var)[variable].sum()
+        total1 = df1[variable].sum()
+        proportions1 = (group1_data / total1 * 100) if total1 > 0 else pd.Series(dtype=float)
+    else:
+        proportions1 = pd.Series(dtype=float)
+        group1_data = pd.Series(dtype=float)
+    
+    if not df2.empty:
+        group2_data = df2.groupby(group_var)[variable].sum()
+        total2 = df2[variable].sum()
+        proportions2 = (group2_data / total2 * 100) if total2 > 0 else pd.Series(dtype=float)
+    else:
+        proportions2 = pd.Series(dtype=float)
+        group2_data = pd.Series(dtype=float)
+    
+    all_groups = set()
+    if not proportions1.empty:
+        all_groups.update(proportions1.index)
+    if not proportions2.empty:
+        all_groups.update(proportions2.index)
+    
+    if not all_groups:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No data available for selected dates and grouping",
+            xref="paper", yref="paper", x=0.5, y=0.5,
+            xanchor='center', yanchor='middle', showarrow=False,
+            font=dict(size=14, color="gray")
+        )
+        fig.update_layout(
+            title=f"{var_label} Proportions by {group_var} - {selected_type}",
+            template="plotly_white",
+            height=350
+        )
+        return fig
+    
+    fig = go.Figure()
+    
+    for i, group in enumerate(sorted(all_groups)):
+        prop1 = proportions1.get(group, 0)
+        prop2 = proportions2.get(group, 0)
+        val1 = group1_data.get(group, 0)
+        val2 = group2_data.get(group, 0)
+        
+        max_val = max(val1, val2) if max(val1, val2) > 0 else 1
+        size1 = max(10, min(30, (val1 / max_val) * 25 + 5))
+        size2 = max(10, min(30, (val2 / max_val) * 25 + 5))
+        
+        y_pos = i
+        
+        fig.add_trace(go.Scatter(
+            x=[prop1, prop2],
+            y=[y_pos, y_pos],
+            mode='lines',
+            line=dict(color='gray', width=2),
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=[prop1],
+            y=[y_pos],
+            mode='markers',
+            marker=dict(
+                size=size1,
+                color='lightblue',
+                line=dict(width=2, color='blue')
+            ),
+            name=f"{date1.strftime('%Y-%m')}",
+            legendgroup="date1",
+            showlegend=(i == 0),
+            hovertemplate=f"<b>{group}</b><br>" +
+                         f"Month: {date1.strftime('%Y-%m')}<br>" +
+                         f"Proportion: {prop1:.1f}%<br>" +
+                         f"Amount: {val1:.1f}<extra></extra>"
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=[prop2],
+            y=[y_pos],
+            mode='markers',
+            marker=dict(
+                size=size2,
+                color='lightcoral',
+                line=dict(width=2, color='red')
+            ),
+            name=f"{date2.strftime('%Y-%m')}",
+            legendgroup="date2",
+            showlegend=(i == 0),
+            hovertemplate=f"<b>{group}</b><br>" +
+                         f"Month: {date2.strftime('%Y-%m')}<br>" +
+                         f"Proportion: {prop2:.1f}%<br>" +
+                         f"Amount: {val2:.1f}<extra></extra>"
+        ))
+    
+    fig.update_layout(
+        title=f"{var_label} Proportions by {group_var} - {selected_type}",
+        xaxis_title="Proportion (%)",
+        yaxis=dict(
+            tickmode='array',
+            tickvals=list(range(len(all_groups))),
+            ticktext=list(sorted(all_groups)),
+            title=group_var
+        ),
+        template="plotly_white",
+        height=350,
+        showlegend=True,
+        margin=dict(l=100, r=50, t=80, b=50)
+    )
+    
+    return fig
 
 # Define the app layout with AppShell
 app.layout = dmc.MantineProvider(
@@ -361,22 +376,18 @@ app.layout = dmc.MantineProvider(
                                                                             dmc.Text("Display Variable:", size="sm", fw=500, mb=5),
                                                                             dmc.SegmentedControl(
                                                                                 id="variable-selector",
-                                                                                value="Amount_total",
+                                                                                value="Total",
                                                                                 orientation="vertical",
                                                                                 fullWidth=False,
                                                                                 color="blue",
                                                                                 data=[
-                                                                                    {"value": "Amount_total", "label": "Amount Total"},
-                                                                                    {"value": "Income_total", "label": "Income Total"},
-                                                                                    {"value": "Amount_1", "label": "Amount 1"},
-                                                                                    {"value": "Amount_2", "label": "Amount 2"},
-                                                                                    {"value": "Amount_3", "label": "Amount 3"},
-                                                                                    {"value": "Income_1", "label": "Income 1"},
-                                                                                    {"value": "Income_2", "label": "Income 2"},
-                                                                                    {"value": "Income_3", "label": "Income 3"},
+                                                                                    {"value": "Total", "label": "Total"},
+                                                                                    {"value": "Type1", "label": "Type 1"},
+                                                                                    {"value": "Type2", "label": "Type 2"},
+                                                                                    {"value": "Type3", "label": "Type 3"},
                                                                                 ],
                                                                                 size="sm",
-                                                                                style={"width": "140px"}
+                                                                                style={"width": "120px"}
                                                                             ),
                                                                         ], gap="xs", align="flex-start"),
                                                                         
@@ -476,17 +487,26 @@ app.layout = dmc.MantineProvider(
                                                                 ], withBorder=True, inheritPadding=True, py="md"),
                                                                 
                                                                 dmc.CardSection([
+                                                                    dmc.Title("Amount Analysis", order=5, mb="sm"),
                                                                     dcc.Graph(
-                                                                        id="main-barchart",
-                                                                        style={"height": "400px"}
+                                                                        id="amount-barchart",
+                                                                        style={"height": "350px"}
                                                                     )
                                                                 ], inheritPadding=True, pt="xs"),
                                                                 
                                                                 dmc.CardSection([
-                                                                    dmc.Title("Amount vs Income Trends", order=5, mb="sm"),
+                                                                    dmc.Title("Income Analysis", order=5, mb="sm"),
                                                                     dcc.Graph(
-                                                                        id="amount-income-chart",
-                                                                        style={"height": "300px"}
+                                                                        id="income-barchart",
+                                                                        style={"height": "350px"}
+                                                                    )
+                                                                ], inheritPadding=True, pt="xs"),
+                                                                
+                                                                dmc.CardSection([
+                                                                    dmc.Title("Return Ratio (Income/Amount)", order=5, mb="sm"),
+                                                                    dcc.Graph(
+                                                                        id="ratio-chart",
+                                                                        style={"height": "250px"}
                                                                     )
                                                                 ], inheritPadding=True, pt="xs"),
                                                             ], withBorder=True, shadow="sm", radius="md", mb="md")
@@ -506,7 +526,7 @@ app.layout = dmc.MantineProvider(
                                                                         autosize=True,
                                                                         minRows=15,
                                                                         maxRows=20,
-                                                                        value="Chart Analysis:\n\n• Use the controls on the left to modify the visualization\n• Switch between Var1 and Var2 for different metrics\n• Apply filters to focus on specific data subsets\n• Use stacking to show composition\n• Group data for comparative analysis\n\nKey Insights:\n• [Add your observations here]\n• [Identify trends and patterns]\n• [Note any anomalies or interesting findings]"
+                                                                        value="Chart Analysis:\n\n• Use the controls on the left to modify the visualization\n• Switch between Total and Type 1/2/3 for different metrics\n• Apply filters to focus on specific data subsets\n• Use stacking to show composition\n• Group data for comparative analysis\n\nKey Insights:\n• [Add your observations here]\n• [Identify trends and patterns]\n• [Note any anomalies or interesting findings]"
                                                                     ),
                                                                 ], withBorder=True, inheritPadding=True, py="xs"),
                                                                 
@@ -536,15 +556,35 @@ app.layout = dmc.MantineProvider(
                                                         dmc.CardSection([
                                                             dmc.Title("Comparison Controls", order=4, mb="md"),
                                                             
-                                                            # First row: Date Selection
+                                                            # Display Type Selection
                                                             dmc.Group([
-                                                                # Date Selection - MultiSelect with calendar icon
+                                                                dmc.Stack([
+                                                                    dmc.Text("Display Type:", size="sm", fw=500, mb=5),
+                                                                    dmc.SegmentedControl(
+                                                                        id="comparison-type-selector",
+                                                                        value="Total",
+                                                                        orientation="horizontal",
+                                                                        fullWidth=False,
+                                                                        color="blue",
+                                                                        data=[
+                                                                            {"value": "Total", "label": "Total"},
+                                                                            {"value": "Type1", "label": "Type 1"},
+                                                                            {"value": "Type2", "label": "Type 2"},
+                                                                            {"value": "Type3", "label": "Type 3"},
+                                                                        ],
+                                                                        size="sm",
+                                                                    ),
+                                                                ], gap="xs", style={"flex": 1}),
+                                                            ], justify="flex-start", align="flex-start", mb="lg"),
+                                                            
+                                                            # Date Selection
+                                                            dmc.Group([
                                                                 dmc.Stack([
                                                                     dmc.Text("Select Dates for Comparison:", size="sm", fw=500, mb=5),
                                                                     dmc.MultiSelect(
                                                                         id="comparison-date-selector",
                                                                         placeholder="Select exactly 2 dates to compare",
-                                                                        data=[],  # Will be populated by callback
+                                                                        data=[],
                                                                         value=[],
                                                                         maxValues=2,
                                                                         size="sm",
@@ -559,155 +599,78 @@ app.layout = dmc.MantineProvider(
                                                                 ], gap="xs", style={"flex": 1}),
                                                             ], justify="flex-start", align="flex-start", mb="lg"),
                                                             
-                                                            # Second row: Filter by, Stack by, Group by (modified)
+                                                            # Filter, Stack, Group controls
                                                             dmc.Grid([
-                                                                dmc.GridCol(
-                                                                    span=4,
-                                                                    children=[
-                                                                        dmc.Text("Filter by:", size="sm", fw=500, mb=5),
-                                                                        dmc.Select(
-                                                                            id="comparison-filter-selector",
-                                                                            placeholder="Select filter",
-                                                                            data=[
-                                                                                {"value": "none", "label": "No Filter"},
-                                                                                {"value": "Division", "label": "Division"},
-                                                                                {"value": "Type", "label": "Type"},
-                                                                                {"value": "Item", "label": "Item"},
-                                                                                {"value": "Function", "label": "Function"},
-                                                                            ],
-                                                                            value="none",
-                                                                            size="sm",
-                                                                        ),
-                                                                    ]
-                                                                ),
-                                                                
-                                                                dmc.GridCol(
-                                                                    span=4,
-                                                                    children=[
-                                                                        dmc.Text("Stack by:", size="sm", fw=500, mb=5),
-                                                                        dmc.Select(
-                                                                            id="comparison-stack-selector",
-                                                                            placeholder="Select stack variable",
-                                                                            data=[
-                                                                                {"value": "none", "label": "No Stack"},
-                                                                                {"value": "Division", "label": "Division"},
-                                                                                {"value": "Type", "label": "Type"},
-                                                                                {"value": "Item", "label": "Item"},
-                                                                                {"value": "Function", "label": "Function"},
-                                                                            ],
-                                                                            value="none",
-                                                                            size="sm",
-                                                                        ),
-                                                                    ]
-                                                                ),
-                                                                
-                                                                dmc.GridCol(
-                                                                    span=4,
-                                                                    children=[
-                                                                        dmc.Text("Group by:", size="sm", fw=500, mb=5),
-                                                                        dmc.Select(
-                                                                            id="comparison-group-selector",
-                                                                            placeholder="Select group variable",
-                                                                            data=[
-                                                                                {"value": "none", "label": "No Grouping"},
-                                                                                {"value": "Division", "label": "Division"},
-                                                                                {"value": "Type", "label": "Type"},
-                                                                                {"value": "Item", "label": "Item"},
-                                                                                {"value": "Function", "label": "Function"},
-                                                                            ],
-                                                                            value="none",
-                                                                            size="sm",
-                                                                        ),
-                                                                    ]
-                                                                ),
+                                                                dmc.GridCol(span=4, children=[
+                                                                    dmc.Text("Filter by:", size="sm", fw=500, mb=5),
+                                                                    dmc.Select(id="comparison-filter-selector", placeholder="Select filter",
+                                                                        data=[{"value": "none", "label": "No Filter"}, {"value": "Division", "label": "Division"},
+                                                                            {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}],
+                                                                        value="none", size="sm")
+                                                                ]),
+                                                                dmc.GridCol(span=4, children=[
+                                                                    dmc.Text("Stack by:", size="sm", fw=500, mb=5),
+                                                                    dmc.Select(id="comparison-stack-selector", placeholder="Select stack variable",
+                                                                        data=[{"value": "none", "label": "No Stack"}, {"value": "Division", "label": "Division"},
+                                                                            {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}],
+                                                                        value="none", size="sm")
+                                                                ]),
+                                                                dmc.GridCol(span=4, children=[
+                                                                    dmc.Text("Group by:", size="sm", fw=500, mb=5),
+                                                                    dmc.Select(id="comparison-group-selector", placeholder="Select group variable",
+                                                                        data=[{"value": "none", "label": "No Grouping"}, {"value": "Division", "label": "Division"},
+                                                                            {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}],
+                                                                        value="none", size="sm")
+                                                                ]),
                                                             ], gutter="md", mb="lg"),
                                                             
-                                                            # Third row: Filter values (MultiSelect)
                                                             html.Div([
                                                                 dmc.Text("Filter values:", size="sm", fw=500, mb=5),
-                                                                dmc.MultiSelect(
-                                                                    id="comparison-filter-values-selector",
-                                                                    placeholder="Select values",
-                                                                    data=[],
-                                                                    value=[],
-                                                                    size="sm",
-                                                                    disabled=True,
-                                                                ),
+                                                                dmc.MultiSelect(id="comparison-filter-values-selector", placeholder="Select values",
+                                                                    data=[], value=[], size="sm", disabled=True),
                                                             ], style={"width": "100%"}),
-                                                            
                                                         ], withBorder=True, inheritPadding=True, py="md"),
                                                     ], withBorder=True, shadow="sm", radius="md", mb="md"),
                                                     
-                                                    # Comparison Notes Box
                                                     dmc.Card([
                                                         dmc.CardSection([
                                                             dmc.Title("Comparison Notes", order=4, mb="md"),
-                                                            dmc.Textarea(
-                                                                id="comparison-textbox",
-                                                                placeholder="Enter your comparison analysis notes here...",
-                                                                autosize=True,
-                                                                minRows=8,
-                                                                maxRows=15,
-                                                                value="Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis\n• Monitor value changes and ratios\n• Identify significant trends between periods\n\nKey Observations:\n• [Record changes in Var1 and Var2]\n• [Note ratio changes and their implications]\n• [Highlight significant variations]\n• [Document insights for decision making]"
-                                                            ),
+                                                            dmc.Textarea(id="comparison-textbox", placeholder="Enter your comparison analysis notes here...",
+                                                                autosize=True, minRows=8, maxRows=15,
+                                                                value="Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis\n• Monitor value changes and ratios\n• Identify significant trends between periods"),
                                                         ], withBorder=True, inheritPadding=True, py="xs"),
-                                                        
                                                         dmc.CardSection([
-                                                            dmc.Button(
-                                                                "Save Comparison",
-                                                                id="save-comparison-btn",
-                                                                variant="filled",
-                                                                size="sm",
-                                                                fullWidth=True
-                                                            )
+                                                            dmc.Button("Save Comparison", id="save-comparison-btn", variant="filled", size="sm", fullWidth=True)
                                                         ], inheritPadding=True, pt="xs")
                                                     ], withBorder=True, shadow="sm", radius="md", mb="md"),
                                                     
-                                                    # Comparison Metrics and Charts
                                                     dmc.Card([
-                                                        # Value Boxes for Comparison Metrics
                                                         dmc.CardSection([
                                                             dmc.Title("Comparison Metrics", order=5, mb="sm"),
                                                             html.Div(id="comparison-value-boxes")
                                                         ], inheritPadding=True, pt="xs"),
-                                                        
-                                                        # Comparison Charts
                                                         dmc.CardSection([
                                                             dmc.Grid([
                                                                 dmc.GridCol([
                                                                     dmc.Title("Amount Total Comparison", order=5, mb="sm"),
-                                                                    dcc.Graph(
-                                                                        id="comparison-var1-chart",
-                                                                        style={"height": "300px"}
-                                                                    )
+                                                                    dcc.Graph(id="comparison-var1-chart", style={"height": "300px"})
                                                                 ], span=6),
                                                                 dmc.GridCol([
                                                                     dmc.Title("Income Total Comparison", order=5, mb="sm"),
-                                                                    dcc.Graph(
-                                                                        id="comparison-var2-chart",
-                                                                        style={"height": "300px"}
-                                                                    )
+                                                                    dcc.Graph(id="comparison-var2-chart", style={"height": "300px"})
                                                                 ], span=6),
                                                             ], gutter="md")
                                                         ], inheritPadding=True, pt="xs"),
-                                                        
-                                                        # Dumbbell Charts Section
                                                         dmc.CardSection([
                                                             dmc.Title("Proportion Changes Analysis", order=5, mb="sm"),
                                                             dmc.Grid([
                                                                 dmc.GridCol([
                                                                     dmc.Title("Amount Total Proportion Changes", order=6, mb="sm"),
-                                                                    dcc.Graph(
-                                                                        id="var1-dumbbell-chart",
-                                                                        style={"height": "350px"}
-                                                                    )
+                                                                    dcc.Graph(id="var1-dumbbell-chart", style={"height": "350px"})
                                                                 ], span=6),
                                                                 dmc.GridCol([
                                                                     dmc.Title("Income Total Proportion Changes", order=6, mb="sm"),
-                                                                    dcc.Graph(
-                                                                        id="var2-dumbbell-chart",
-                                                                        style={"height": "350px"}
-                                                                    )
+                                                                    dcc.Graph(id="var2-dumbbell-chart", style={"height": "350px"})
                                                                 ], span=6),
                                                             ], gutter="md")
                                                         ], inheritPadding=True, pt="xs"),
@@ -716,713 +679,284 @@ app.layout = dmc.MantineProvider(
                                             ]
                                         ),
                                         
-                                        dmc.TabsPanel(
-                                            value="tool",
-                                            children=[
-                                                dmc.Center([
-                                                    dmc.Stack([
-                                                        dmc.Title("Tool Tab", order=2),
-                                                        dmc.Text("This tab is ready for tool features implementation.", c="dimmed"),
-                                                    ], align="center")
-                                                ], style={"height": "400px"})
-                                            ]
-                                        ),
-                                    ],
-                                    id="main-tabs"
-                                )
-                            ],
-                            style={"display": "block"}
-                        ),
+                                        dmc.TabsPanel(value="tool", children=[
+                                            dmc.Center([
+                                                dmc.Stack([
+                                                    dmc.Title("Tool Tab", order=2),
+                                                    dmc.Text("This tab is ready for tool features implementation.", c="dimmed"),
+                                                ], align="center")
+                                            ], style={"height": "400px"})
+                                        ]),
+                                    ], id="main-tabs")
+                            ], style={"display": "block"}),
                         
-                        # Scenario page content (placeholder)
-                        html.Div(
-                            id="scenario-content",
-                            children=[
-                                dmc.Center([
-                                    dmc.Stack([
-                                        dmc.Title("Scenario Page", order=2),
-                                        dmc.Text("This page is ready for scenario analysis implementation.", c="dimmed"),
-                                    ], align="center")
-                                ], style={"height": "400px"})
-                            ],
-                            style={"display": "none"}
-                        )
-                    ]
-                ),
-            ],
-        )
-    ]
-)
+                        html.Div(id="scenario-content", children=[
+                            dmc.Center([
+                                dmc.Stack([
+                                    dmc.Title("Scenario Page", order=2),
+                                    dmc.Text("This tab is ready for scenario analysis implementation.", c="dimmed"),
+                                ], align="center")
+                            ], style={"height": "400px"})
+                        ], style={"display": "none"})
+                    ])
+            ])
+    ])
 
-# Updated function to create dumbbell charts for new data structure
-def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var):
-    """Create a dumbbell chart showing proportion changes between two dates - updated for new data structure"""
-    if group_var == "none":
-        fig = go.Figure()
-        fig.add_annotation(
-            text="Select a grouping variable to see proportion analysis",
-            xref="paper", yref="paper", x=0.5, y=0.5,
-            xanchor='center', yanchor='middle', showarrow=False,
-            font=dict(size=14, color="gray")
-        )
-        fig.update_layout(
-            title=f"{variable.replace('_', ' ').title()} Proportions",
-            template="plotly_white",
-            height=350
-        )
-        return fig
-    
-    # Calculate totals for each group at each date
-    if not df1.empty:
-        group1_data = df1.groupby(group_var)[variable].sum()
-        total1 = df1[variable].sum()
-        proportions1 = (group1_data / total1 * 100) if total1 > 0 else pd.Series(dtype=float)
-    else:
-        proportions1 = pd.Series(dtype=float)
-        group1_data = pd.Series(dtype=float)
-    
-    if not df2.empty:
-        group2_data = df2.groupby(group_var)[variable].sum()
-        total2 = df2[variable].sum()
-        proportions2 = (group2_data / total2 * 100) if total2 > 0 else pd.Series(dtype=float)
-    else:
-        proportions2 = pd.Series(dtype=float)
-        group2_data = pd.Series(dtype=float)
-    
-    # Get all unique groups
-    all_groups = set()
-    if not proportions1.empty:
-        all_groups.update(proportions1.index)
-    if not proportions2.empty:
-        all_groups.update(proportions2.index)
-    
-    if not all_groups:
-        fig = go.Figure()
-        fig.add_annotation(
-            text="No data available for selected dates and grouping",
-            xref="paper", yref="paper", x=0.5, y=0.5,
-            xanchor='center', yanchor='middle', showarrow=False,
-            font=dict(size=14, color="gray")
-        )
-        fig.update_layout(
-            title=f"{variable.replace('_', ' ').title()} Proportions by {group_var}",
-            template="plotly_white",
-            height=350
-        )
-        return fig
-    
-    fig = go.Figure()
-    
-    # Create dumbbell chart
-    for i, group in enumerate(sorted(all_groups)):
-        prop1 = proportions1.get(group, 0)
-        prop2 = proportions2.get(group, 0)
-        val1 = group1_data.get(group, 0)
-        val2 = group2_data.get(group, 0)
-        
-        # Calculate circle sizes based on actual values (scaled)
-        max_val = max(val1, val2) if max(val1, val2) > 0 else 1
-        size1 = max(10, min(30, (val1 / max_val) * 25 + 5))
-        size2 = max(10, min(30, (val2 / max_val) * 25 + 5))
-        
-        y_pos = i
-        
-        # Add connecting line
-        fig.add_trace(go.Scatter(
-            x=[prop1, prop2],
-            y=[y_pos, y_pos],
-            mode='lines',
-            line=dict(color='gray', width=2),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-        
-        # Add circles for date 1
-        fig.add_trace(go.Scatter(
-            x=[prop1],
-            y=[y_pos],
-            mode='markers',
-            marker=dict(
-                size=size1,
-                color='lightblue',
-                line=dict(width=2, color='blue')
-            ),
-            name=f"{date1.strftime('%Y-%m')}",
-            legendgroup="date1",
-            showlegend=(i == 0),
-            hovertemplate=f"<b>{group}</b><br>" +
-                         f"Month: {date1.strftime('%Y-%m')}<br>" +
-                         f"Proportion: {prop1:.1f}%<br>" +
-                         f"Amount: {val1:.1f}<extra></extra>"
-        ))
-        
-        # Add circles for date 2
-        fig.add_trace(go.Scatter(
-            x=[prop2],
-            y=[y_pos],
-            mode='markers',
-            marker=dict(
-                size=size2,
-                color='lightcoral',
-                line=dict(width=2, color='red')
-            ),
-            name=f"{date2.strftime('%Y-%m')}",
-            legendgroup="date2",
-            showlegend=(i == 0),
-            hovertemplate=f"<b>{group}</b><br>" +
-                         f"Month: {date2.strftime('%Y-%m')}<br>" +
-                         f"Proportion: {prop2:.1f}%<br>" +
-                         f"Amount: {val2:.1f}<extra></extra>"
-        ))
-    
-    # Update layout
-    fig.update_layout(
-        title=f"{variable.replace('_', ' ').title()} Proportions by {group_var}",
-        xaxis_title="Proportion (%)",
-        yaxis=dict(
-            tickmode='array',
-            tickvals=list(range(len(all_groups))),
-            ticktext=list(sorted(all_groups)),
-            title=group_var
-        ),
-        template="plotly_white",
-        height=350,
-        showlegend=True,
-        margin=dict(l=100, r=50, t=80, b=50)
-    )
-    
-    return fig
+# CALLBACKS SECTION
 
-# Function to generate enhanced comparison text with proportion analysis
-def generate_enhanced_comparison_text(var1_old, var1_new, var2_old, var2_new, date1, date2, 
-                                    filter_var, filter_values, group_var, df1, df2):
-    """Generate comprehensive comparison analysis text including proportion changes"""
-    
-    # Helper function to determine change type and generate sentence
-    def create_change_sentence(variable, old_val, new_val, date1, date2):
-        if abs((new_val - old_val) / old_val) < 0.01 if old_val != 0 else abs(new_val) < 0.01:
-            change_type = "remained essentially equal"
-            relative_change = 0
-        elif new_val > old_val:
-            change_type = "increased"
-            relative_change = ((new_val - old_val) / old_val * 100) if old_val != 0 else 100
-        else:
-            change_type = "decreased"
-            relative_change = ((new_val - old_val) / old_val * 100) if old_val != 0 else -100
-        
-        if change_type == "remained essentially equal":
-            return f"{variable} amount was {old_val:.1f} in {date1.strftime('%Y-%m-%d')} and {change_type} at {new_val:.1f} in {date2.strftime('%Y-%m-%d')}."
-        else:
-            return f"{variable} amount was {old_val:.1f} in {date1.strftime('%Y-%m-%d')} and {change_type} to {new_val:.1f} in {date2.strftime('%Y-%m-%d')}, which corresponds to a relative {change_type.replace('increased', 'increase').replace('decreased', 'decrease')} of {abs(relative_change):.1f}%."
-    
-    # Build the text
-    text_parts = []
-    
-    # Add filter information if applied
-    if filter_var != "none" and filter_values:
-        filter_text = f"Analysis filtered by {filter_var}: {', '.join(filter_values)}.\n\n"
-        text_parts.append(filter_text)
-    
-    # Add comparison header
-    text_parts.append("COMPARISON ANALYSIS:\n")
-    text_parts.append("=" * 30 + "\n\n")
-    
-    # Generate sentences for Var1 and Var2
-    var1_sentence = create_change_sentence("Var1", var1_old, var1_new, date1, date2)
-    var2_sentence = create_change_sentence("Var2", var2_old, var2_new, date1, date2)
-    
-    text_parts.append(var1_sentence + "\n\n")
-    text_parts.append(var2_sentence + "\n\n")
-    
-    # Add ratio analysis
-    ratio_old = (var1_old / var2_old) if var2_old != 0 else 0
-    ratio_new = (var1_new / var2_new) if var2_new != 0 else 0
-    ratio_change = ratio_new - ratio_old
-    
-    if abs(ratio_change) < 0.01:
-        ratio_text = f"The Var1/Var2 ratio remained stable at approximately {ratio_old:.2f}."
-    elif ratio_change > 0:
-        ratio_text = f"The Var1/Var2 ratio improved from {ratio_old:.2f} to {ratio_new:.2f}, representing an increase of {ratio_change:.2f}."
-    else:
-        ratio_text = f"The Var1/Var2 ratio declined from {ratio_old:.2f} to {ratio_new:.2f}, representing a decrease of {abs(ratio_change):.2f}."
-    
-    text_parts.append(ratio_text + "\n\n")
-    
-    # Add proportion analysis if grouping is selected
-    if group_var != "none" and group_var in ['var3', 'var4'] and not df1.empty and not df2.empty:
-        text_parts.append("PROPORTION ANALYSIS BY GROUPS:\n")
-        text_parts.append("=" * 30 + "\n\n")
-        
-        # Analyze Var1 proportions
-        var1_groups1 = df1.groupby(group_var)['var1'].sum()
-        var1_total1 = df1['var1'].sum()
-        var1_props1 = (var1_groups1 / var1_total1 * 100) if var1_total1 > 0 else pd.Series(dtype=float)
-        
-        var1_groups2 = df2.groupby(group_var)['var1'].sum()
-        var1_total2 = df2['var1'].sum()
-        var1_props2 = (var1_groups2 / var1_total2 * 100) if var1_total2 > 0 else pd.Series(dtype=float)
-        
-        text_parts.append("Var1 Proportion Changes:\n")
-        all_groups = set(var1_props1.index) | set(var1_props2.index)
-        for group in sorted(all_groups):
-            prop1 = var1_props1.get(group, 0)
-            prop2 = var1_props2.get(group, 0)
-            amount1 = var1_groups1.get(group, 0)
-            amount2 = var1_groups2.get(group, 0)
-            prop_change = prop2 - prop1
-            
-            change_desc = "increased" if prop_change > 0 else "decreased" if prop_change < 0 else "remained stable"
-            text_parts.append(f"• {group}: {prop1:.1f}% → {prop2:.1f}% ({change_desc} by {abs(prop_change):.1f}pp), amounts: {amount1:.1f} → {amount2:.1f}\n")
-        
-        text_parts.append("\n")
-        
-        # Analyze Var2 proportions
-        var2_groups1 = df1.groupby(group_var)['var2'].sum()
-        var2_total1 = df1['var2'].sum()
-        var2_props1 = (var2_groups1 / var2_total1 * 100) if var2_total1 > 0 else pd.Series(dtype=float)
-        
-        var2_groups2 = df2.groupby(group_var)['var2'].sum()
-        var2_total2 = df2['var2'].sum()
-        var2_props2 = (var2_groups2 / var2_total2 * 100) if var2_total2 > 0 else pd.Series(dtype=float)
-        
-        text_parts.append("Var2 Proportion Changes:\n")
-        all_groups = set(var2_props1.index) | set(var2_props2.index)
-        for group in sorted(all_groups):
-            prop1 = var2_props1.get(group, 0)
-            prop2 = var2_props2.get(group, 0)
-            amount1 = var2_groups1.get(group, 0)
-            amount2 = var2_groups2.get(group, 0)
-            prop_change = prop2 - prop1
-            
-            change_desc = "increased" if prop_change > 0 else "decreased" if prop_change < 0 else "remained stable"
-            text_parts.append(f"• {group}: {prop1:.1f}% → {prop2:.1f}% ({change_desc} by {abs(prop_change):.1f}pp), amounts: {amount1:.1f} → {amount2:.1f}\n")
-        
-        text_parts.append("\n")
-    
-    # Add summary section
-    text_parts.append("SUMMARY:\n")
-    text_parts.append("=" * 30 + "\n")
-    text_parts.append("• [Add your key insights here]\n")
-    text_parts.append("• [Note any significant patterns]\n")
-    text_parts.append("• [Record actionable findings]")
-    
-    return "".join(text_parts)
-
-# Callback for navigation
 @callback(
-    [Output("today-content", "style"),
-     Output("scenario-content", "style"),
-     Output("nav-today", "active"),
-     Output("nav-scenario", "active")],
-    [Input("nav-today", "n_clicks"),
-     Input("nav-scenario", "n_clicks")],
+    [Output("today-content", "style"), Output("scenario-content", "style"),
+     Output("nav-today", "active"), Output("nav-scenario", "active")],
+    [Input("nav-today", "n_clicks"), Input("nav-scenario", "n_clicks")],
     prevent_initial_call=True
 )
 def update_navigation(today_clicks, scenario_clicks):
     ctx = dash.callback_context
     if not ctx.triggered:
         return {"display": "block"}, {"display": "none"}, True, False
-    
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    
     if triggered_id == "nav-today":
         return {"display": "block"}, {"display": "none"}, True, False
     elif triggered_id == "nav-scenario":
         return {"display": "none"}, {"display": "block"}, False, True
-    
     return {"display": "block"}, {"display": "none"}, True, False
 
-# Callback to update filter values based on selected filter variable
 @callback(
-    [Output("filter-values-selector", "data"),
-     Output("filter-values-selector", "disabled"),
-     Output("filter-values-selector", "value")],
+    [Output("filter-values-selector", "data"), Output("filter-values-selector", "disabled"), Output("filter-values-selector", "value")],
     [Input("filter-selector", "value")]
 )
 def update_filter_values(filter_var):
     if filter_var == "none":
         return [], True, []
-    
     if filter_var in ['Division', 'Type', 'Item', 'Function']:
         unique_values = sample_data[filter_var].unique()
         options = [{"value": val, "label": val} for val in sorted(unique_values)]
-        return options, False, list(unique_values)  # Select all by default
-    
+        return options, False, list(unique_values)
     return [], True, []
 
-# Callback for the main bar chart
 @callback(
-    Output("main-barchart", "figure"),
-    [Input("variable-selector", "value"),
-     Input("filter-selector", "value"),
-     Input("filter-values-selector", "value"),
-     Input("stack-selector", "value"),
-     Input("group-selector", "value"),
-     Input("year-range-slider", "value")]
+    [Output("amount-barchart", "figure"), Output("income-barchart", "figure"), Output("ratio-chart", "figure")],
+    [Input("variable-selector", "value"), Input("filter-selector", "value"), Input("filter-values-selector", "value"),
+     Input("stack-selector", "value"), Input("group-selector", "value"), Input("year-range-slider", "value")]
 )
-def update_barchart(selected_var, filter_var, filter_values, stack_var, group_var, year_range):
-    # Create a copy of the data for processing
-    df = sample_data.copy()
+def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_var, year_range):
+    if selected_type == "Total":
+        amount_col, income_col = "Amount_total", "Income_total"
+    elif selected_type == "Type1":
+        amount_col, income_col = "Amount_1", "Income_1"
+    elif selected_type == "Type2":
+        amount_col, income_col = "Amount_2", "Income_2"
+    else:  # Type3
+        amount_col, income_col = "Amount_3", "Income_3"
     
-    # Filter by year range
+    df = sample_data.copy()
     df = df[(df['date'].dt.year >= year_range[0]) & (df['date'].dt.year <= year_range[1])]
     
-    # Apply filtering if selected
     if filter_var != "none" and filter_var in df.columns and filter_values:
         df = df[df[filter_var].isin(filter_values)]
     
-    # Prepare data for plotting - use year-month format since data is monthly
     df['month'] = df['date'].dt.to_period('M').astype(str)
     
-    # Create the figure based on selected options
-    fig = go.Figure()
-    
-    if stack_var != "none" and stack_var in df.columns:
-        # Create stacked bar chart - each column per month divided by stack_var
-        if stack_var in ['Division', 'Type', 'Item', 'Function']:  # Categorical variables
-            # Group by month and stack variable, then sum the selected variable
-            stacked_data = df.groupby(['month', stack_var])[selected_var].sum().unstack(fill_value=0)
-            
+    def create_bar_chart(variable_col, title):
+        fig = go.Figure()
+        if stack_var != "none" and stack_var in df.columns and stack_var in ['Division', 'Type', 'Item', 'Function']:
+            stacked_data = df.groupby(['month', stack_var])[variable_col].sum().unstack(fill_value=0)
             for category in stacked_data.columns:
-                fig.add_trace(go.Bar(
-                    x=stacked_data.index,
-                    y=stacked_data[category],
-                    name=f"{category}",
-                    text=stacked_data[category].round(1),
-                    textposition='auto',
-                ))
-        
-        fig.update_layout(barmode='stack')
-        
-    elif group_var != "none" and group_var in df.columns:
-        # Create grouped bar chart
-        if group_var in ['Division', 'Type', 'Item', 'Function']:  # Categorical variables
-            for category in df[group_var].unique():
+                fig.add_trace(go.Bar(x=stacked_data.index, y=stacked_data[category], name=f"{category}",
+                    text=stacked_data[category].round(1), textposition='auto'))
+            fig.update_layout(barmode='stack')
+        elif group_var != "none" and group_var in df.columns and group_var in ['Division', 'Type', 'Item', 'Function']:
+            for category in sorted(df[group_var].unique()):
                 category_data = df[df[group_var] == category]
-                monthly_data = category_data.groupby('month')[selected_var].sum().reset_index()
-                
-                fig.add_trace(go.Bar(
-                    x=monthly_data['month'],
-                    y=monthly_data[selected_var],
-                    name=f"{category}",
-                    text=monthly_data[selected_var].round(1),
-                    textposition='auto',
-                ))
-        
-        fig.update_layout(barmode='group')
-        
+                monthly_data = category_data.groupby('month')[variable_col].sum().reset_index()
+                fig.add_trace(go.Bar(x=monthly_data['month'], y=monthly_data[variable_col], name=f"{category}",
+                    text=monthly_data[variable_col].round(1), textposition='auto'))
+            fig.update_layout(barmode='group')
+        else:
+            monthly_data = df.groupby('month')[variable_col].sum().reset_index()
+            fig.add_trace(go.Bar(x=monthly_data['month'], y=monthly_data[variable_col], name=title,
+                marker_color='#1f77b4' if 'Amount' in title else '#ff7f0e',
+                text=monthly_data[variable_col].round(1), textposition='auto'))
+        fig.update_layout(title=title, xaxis_title="Month", yaxis_title="Value", template="plotly_white",
+            showlegend=True, height=350, margin=dict(l=50, r=50, t=60, b=50))
+        fig.update_xaxes(tickangle=45)
+        return fig
+    
+    amount_chart = create_bar_chart(amount_col, f"Amount - {selected_type}")
+    income_chart = create_bar_chart(income_col, f"Income - {selected_type}")
+    
+    ratio_fig = go.Figure()
+    if group_var != "none" and group_var in df.columns and group_var in ['Division', 'Type', 'Item', 'Function']:
+        for category in sorted(df[group_var].unique()):
+            category_data = df[df[group_var] == category]
+            monthly_data = category_data.groupby('month').agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
+            monthly_data['ratio'] = monthly_data[income_col] / monthly_data[amount_col].replace(0, np.nan)
+            ratio_fig.add_trace(go.Scatter(x=monthly_data['month'], y=monthly_data['ratio'],
+                mode='lines+markers', name=f"{category}", line=dict(width=2), marker=dict(size=6)))
     else:
-        # Create simple bar chart
-        monthly_data = df.groupby('month')[selected_var].sum().reset_index()
-        
-        fig.add_trace(go.Bar(
-            x=monthly_data['month'],
-            y=monthly_data[selected_var],
-            name=selected_var.upper().replace('_', ' '),
-            marker_color='#1f77b4',
-            text=monthly_data[selected_var].round(1),
-            textposition='auto',
-        ))
+        monthly_data = df.groupby('month').agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
+        monthly_data['ratio'] = monthly_data[income_col] / monthly_data[amount_col].replace(0, np.nan)
+        ratio_fig.add_trace(go.Scatter(x=monthly_data['month'], y=monthly_data['ratio'],
+            mode='lines+markers', name='Return Ratio', line=dict(color='#2ca02c', width=3), marker=dict(size=8)))
     
-    # Update layout
-    fig.update_layout(
-        title=f"{selected_var.upper()} Analysis Over Time",
-        xaxis_title="Month",
-        yaxis_title=selected_var.upper(),
-        template="plotly_white",
-        showlegend=True,
-        height=400,
-        margin=dict(l=50, r=50, t=80, b=50),
-    )
+    ratio_fig.update_layout(title=f"Return Ratio (Income/Amount) - {selected_type}", xaxis_title="Month", yaxis_title="Ratio",
+        template="plotly_white", height=250, margin=dict(l=50, r=50, t=60, b=50), showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.4, xanchor="center", x=0.5))
+    ratio_fig.update_xaxes(tickangle=45)
     
-    # Rotate x-axis labels for better readability
-    fig.update_xaxes(tickangle=45)
-    
-    return fig
+    return amount_chart, income_chart, ratio_fig
 
-    return fig
-
-@callback(
-    Output("comparison-date-selector", "data"),
-    Input("main-tabs", "value")
-)
+@callback(Output("comparison-date-selector", "data"), Input("main-tabs", "value"))
 def populate_comparison_dates(active_tab):
     if active_tab == "comparison":
-        # Get unique dates from the dataset and format them nicely
         unique_dates = sorted(sample_data['date'].dt.to_period('M').unique())
-        date_options = [
-            {
-                "value": str(date), 
-                "label": str(date)  # Format as YYYY-MM
-            } 
-            for date in unique_dates
-        ]
-        return date_options
+        return [{"value": str(date), "label": str(date)} for date in unique_dates]
     return []
 
-# Callback to update comparison filter values
 @callback(
-    [Output("comparison-filter-values-selector", "data"),
-     Output("comparison-filter-values-selector", "disabled"),
+    [Output("comparison-filter-values-selector", "data"), Output("comparison-filter-values-selector", "disabled"),
      Output("comparison-filter-values-selector", "value")],
     [Input("comparison-filter-selector", "value")]
 )
 def update_comparison_filter_values(filter_var):
     if filter_var == "none":
         return [], True, []
-    
     if filter_var in ['Division', 'Type', 'Item', 'Function']:
         unique_values = sample_data[filter_var].unique()
         options = [{"value": val, "label": val} for val in sorted(unique_values)]
-        return options, False, list(unique_values)  # Select all by default
-    
+        return options, False, list(unique_values)
     return [], True, []
 
-# Enhanced callback for comparison content including dumbbell charts
 @callback(
-    [Output("comparison-value-boxes", "children"),
-     Output("comparison-var1-chart", "figure"),
-     Output("comparison-var2-chart", "figure"),
-     Output("var1-dumbbell-chart", "figure"),
-     Output("var2-dumbbell-chart", "figure"),
-     Output("comparison-textbox", "value")],
-    [Input("comparison-date-selector", "value"),
-     Input("comparison-filter-selector", "value"),
-     Input("comparison-filter-values-selector", "value"),
-     Input("comparison-stack-selector", "value"),
-     Input("comparison-group-selector", "value")]
+    [Output("comparison-value-boxes", "children"), Output("comparison-var1-chart", "figure"),
+     Output("comparison-var2-chart", "figure"), Output("var1-dumbbell-chart", "figure"),
+     Output("var2-dumbbell-chart", "figure"), Output("comparison-textbox", "value")],
+    [Input("comparison-type-selector", "value"), Input("comparison-date-selector", "value"),
+     Input("comparison-filter-selector", "value"), Input("comparison-filter-values-selector", "value"),
+     Input("comparison-stack-selector", "value"), Input("comparison-group-selector", "value")]
 )
-def update_enhanced_comparison_content(selected_dates, filter_var, filter_values, stack_var, group_var):
-    # Default empty figures
-    empty_fig = go.Figure()
-    empty_fig.update_layout(
-        title="Select 2 dates to compare",
-        template="plotly_white",
-        height=300,
-        showlegend=False
-    )
-    empty_fig.add_annotation(
-        text="Please select exactly 2 dates for comparison",
-        xref="paper", yref="paper",
-        x=0.5, y=0.5, xanchor='center', yanchor='middle',
-        showarrow=False, font=dict(size=14, color="gray")
-    )
+def update_enhanced_comparison_content(selected_type, selected_dates, filter_var, filter_values, stack_var, group_var):
+    if selected_type == "Total":
+        amount_col, income_col = "Amount_total", "Income_total"
+    elif selected_type == "Type1":
+        amount_col, income_col = "Amount_1", "Income_1"
+    elif selected_type == "Type2":
+        amount_col, income_col = "Amount_2", "Income_2"
+    else:
+        amount_col, income_col = "Amount_3", "Income_3"
     
-    # Check if exactly 2 dates are selected
+    empty_fig = go.Figure()
+    empty_fig.update_layout(title="Select 2 dates to compare", template="plotly_white", height=300, showlegend=False)
+    empty_fig.add_annotation(text="Please select exactly 2 dates for comparison", xref="paper", yref="paper",
+        x=0.5, y=0.5, xanchor='center', yanchor='middle', showarrow=False, font=dict(size=14, color="gray"))
+    
     if not selected_dates or len(selected_dates) != 2:
-        empty_boxes = dmc.Center([
-            dmc.Text("Please select exactly 2 dates to see comparison metrics", c="dimmed", size="sm")
-        ], style={"padding": "20px"})
-        default_text = "Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis\n• Monitor value changes and ratios\n• Identify significant trends between periods\n\nKey Observations:\n• [Record changes in Var1 and Var2]\n• [Note ratio changes and their implications]\n• [Highlight significant variations]\n• [Document insights for decision making]"
+        empty_boxes = dmc.Center([dmc.Text("Please select exactly 2 dates to see comparison metrics", c="dimmed", size="sm")],
+            style={"padding": "20px"})
+        default_text = "Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis"
         return empty_boxes, empty_fig, empty_fig, empty_fig, empty_fig, default_text
     
-    # Convert dates and sort them (oldest first, newest second)
-    date1, date2 = sorted([pd.to_datetime(date + '-01') for date in selected_dates])  # Convert YYYY-MM to datetime
-    
-    # Filter data for the selected months
+    date1, date2 = sorted([pd.to_datetime(date + '-01') for date in selected_dates])
     df = sample_data.copy()
     df_date1 = df[df['date'].dt.to_period('M') == date1.to_period('M')]
     df_date2 = df[df['date'].dt.to_period('M') == date2.to_period('M')]
     
-    # Apply additional filtering if selected
     if filter_var != "none" and filter_var in df.columns and filter_values:
         df_date1 = df_date1[df_date1[filter_var].isin(filter_values)]
         df_date2 = df_date2[df_date2[filter_var].isin(filter_values)]
     
-    # Calculate aggregate values for comparison - using Amount_total and Income_total as primary comparison variables
-    amount_old = df_date1['Amount_total'].sum() if not df_date1.empty else 0
-    amount_new = df_date2['Amount_total'].sum() if not df_date2.empty else 0
-    income_old = df_date1['Income_total'].sum() if not df_date1.empty else 0
-    income_new = df_date2['Income_total'].sum() if not df_date2.empty else 0
+    amount_old = df_date1[amount_col].sum() if not df_date1.empty else 0
+    amount_new = df_date2[amount_col].sum() if not df_date2.empty else 0
+    income_old = df_date1[income_col].sum() if not df_date1.empty else 0
+    income_new = df_date2[income_col].sum() if not df_date2.empty else 0
     
-    # Calculate percentage changes
     amount_change = ((amount_new - amount_old) / amount_old * 100) if amount_old != 0 else 0
     income_change = ((income_new - income_old) / income_old * 100) if income_old != 0 else 0
-    
-    # Calculate ratios
-    ratio_old = (amount_old / income_old) if income_old != 0 else 0
-    ratio_new = (amount_new / income_new) if income_new != 0 else 0
+    ratio_old = (income_old / amount_old) if amount_old != 0 else 0
+    ratio_new = (income_new / amount_new) if amount_new != 0 else 0
     ratio_difference = ratio_new - ratio_old
     
-    # Generate enhanced automatic text with proportion analysis
     comparison_text = generate_enhanced_comparison_text_updated(
-        amount_old, amount_new, income_old, income_new, date1, date2, 
-        filter_var, filter_values, group_var, df_date1, df_date2
-    )
+        amount_old, amount_new, income_old, income_new, date1, date2,
+        filter_var, filter_values, group_var, df_date1, df_date2, selected_type, amount_col, income_col)
     
-    # Create value boxes
     value_boxes = dmc.SimpleGrid([
-        # Amount Change
-        dmc.Card([
-            dmc.Stack([
-                dmc.Text("Amount Change", size="sm", c="dimmed"),
-                dmc.Group([
-                    dmc.Text(f"{amount_change:+.1f}%", size="xl", fw=700, 
-                            c="green" if amount_change >= 0 else "red"),
-                    DashIconify(
-                        icon="material-symbols:trending-up" if amount_change >= 0 else "material-symbols:trending-down",
-                        width=24,
-                        color="green" if amount_change >= 0 else "red"
-                    )
-                ], justify="space-between", align="center"),
-                dmc.Text(f"{amount_old:.1f} → {amount_new:.1f}", size="xs", c="dimmed")
-            ], gap="xs")
-        ], withBorder=True, shadow="sm", radius="md", p="md"),
-        
-        # Income Change
-        dmc.Card([
-            dmc.Stack([
-                dmc.Text("Income Change", size="sm", c="dimmed"),
-                dmc.Group([
-                    dmc.Text(f"{income_change:+.1f}%", size="xl", fw=700,
-                            c="green" if income_change >= 0 else "red"),
-                    DashIconify(
-                        icon="material-symbols:trending-up" if income_change >= 0 else "material-symbols:trending-down",
-                        width=24,
-                        color="green" if income_change >= 0 else "red"
-                    )
-                ], justify="space-between", align="center"),
-                dmc.Text(f"{income_old:.1f} → {income_new:.1f}", size="xs", c="dimmed")
-            ], gap="xs")
-        ], withBorder=True, shadow="sm", radius="md", p="md"),
-        
-        # Ratio Difference
-        dmc.Card([
-            dmc.Stack([
-                dmc.Text("Amount/Income Ratio Change", size="sm", c="dimmed"),
-                dmc.Group([
-                    dmc.Text(f"{ratio_difference:+.2f}", size="xl", fw=700,
-                            c="green" if ratio_difference >= 0 else "red"),
-                    DashIconify(
-                        icon="material-symbols:trending-up" if ratio_difference >= 0 else "material-symbols:trending-down",
-                        width=24,
-                        color="green" if ratio_difference >= 0 else "red"
-                    )
-                ], justify="space-between", align="center"),
-                dmc.Text(f"{ratio_old:.2f} → {ratio_new:.2f}", size="xs", c="dimmed")
-            ], gap="xs")
-        ], withBorder=True, shadow="sm", radius="md", p="md"),
+        dmc.Card([dmc.Stack([
+            dmc.Text(f"Amount Change - {selected_type}", size="sm", c="dimmed"),
+            dmc.Group([
+                dmc.Text(f"{amount_change:+.1f}%", size="xl", fw=700, c="green" if amount_change >= 0 else "red"),
+                DashIconify(icon="material-symbols:trending-up" if amount_change >= 0 else "material-symbols:trending-down",
+                    width=24, color="green" if amount_change >= 0 else "red")
+            ], justify="space-between", align="center"),
+            dmc.Text(f"{amount_old:.1f} → {amount_new:.1f}", size="xs", c="dimmed")
+        ], gap="xs")], withBorder=True, shadow="sm", radius="md", p="md"),
+        dmc.Card([dmc.Stack([
+            dmc.Text(f"Income Change - {selected_type}", size="sm", c="dimmed"),
+            dmc.Group([
+                dmc.Text(f"{income_change:+.1f}%", size="xl", fw=700, c="green" if income_change >= 0 else "red"),
+                DashIconify(icon="material-symbols:trending-up" if income_change >= 0 else "material-symbols:trending-down",
+                    width=24, color="green" if income_change >= 0 else "red")
+            ], justify="space-between", align="center"),
+            dmc.Text(f"{income_old:.1f} → {income_new:.1f}", size="xs", c="dimmed")
+        ], gap="xs")], withBorder=True, shadow="sm", radius="md", p="md"),
+        dmc.Card([dmc.Stack([
+            dmc.Text(f"Return Ratio Change - {selected_type}", size="sm", c="dimmed"),
+            dmc.Group([
+                dmc.Text(f"{ratio_difference:+.2f}", size="xl", fw=700, c="green" if ratio_difference >= 0 else "red"),
+                DashIconify(icon="material-symbols:trending-up" if ratio_difference >= 0 else "material-symbols:trending-down",
+                    width=24, color="green" if ratio_difference >= 0 else "red")
+            ], justify="space-between", align="center"),
+            dmc.Text(f"{ratio_old:.2f} → {ratio_new:.2f}", size="xs", c="dimmed")
+        ], gap="xs")], withBorder=True, shadow="sm", radius="md", p="md"),
     ], cols=3, spacing="sm", mb="lg")
     
-    # Create comparison charts using updated function
-    def create_comparison_chart_updated(df1, df2, variable, date1, date2):
-        fig = go.Figure()
-        
-        # Create categorical x-axis labels
-        date_labels = [date1.strftime('%Y-%m'), date2.strftime('%Y-%m')]
-        
-        if group_var != "none" and group_var in df.columns:
-            # Grouped comparison
-            if group_var in ['Division', 'Type', 'Item', 'Function']:  # Categorical variables
-                # Get all unique categories from both datasets
-                all_categories = set()
-                if not df1.empty:
-                    all_categories.update(df1[group_var].unique())
-                if not df2.empty:
-                    all_categories.update(df2[group_var].unique())
-                categories = sorted(all_categories)
-                
-                for category in categories:
-                    # Calculate values for each category at each date
-                    val1 = df1[df1[group_var] == category][variable].sum() if not df1.empty and category in df1[group_var].values else 0
-                    val2 = df2[df2[group_var] == category][variable].sum() if not df2.empty and category in df2[group_var].values else 0
-                    
-                    fig.add_trace(go.Bar(
-                        x=date_labels,
-                        y=[val1, val2],
-                        name=f"{category}",
-                        text=[f"{val1:.1f}", f"{val2:.1f}"],
-                        textposition='auto',
-                    ))
-                fig.update_layout(barmode='group')
-                
-        elif stack_var != "none" and stack_var in df.columns:
-            # Stacked comparison
-            if stack_var in ['Division', 'Type', 'Item', 'Function']:  # Categorical variables
-                # Get all unique categories from both datasets
-                all_categories = set()
-                if not df1.empty:
-                    all_categories.update(df1[stack_var].unique())
-                if not df2.empty:
-                    all_categories.update(df2[stack_var].unique())
-                categories = sorted(all_categories)
-                
-                for category in categories:
-                    val1 = df1[df1[stack_var] == category][variable].sum() if not df1.empty and category in df1[stack_var].values else 0
-                    val2 = df2[df2[stack_var] == category][variable].sum() if not df2.empty and category in df2[stack_var].values else 0
-                    
-                    fig.add_trace(go.Bar(
-                        x=date_labels,
-                        y=[val1, val2],
-                        name=f"{category}",
-                        text=[f"{val1:.1f}", f"{val2:.1f}"],
-                        textposition='auto',
-                    ))
-                fig.update_layout(barmode='stack')
-                
+    def create_comparison_chart(df1, df2, variable, var_label):
+        fig, date_labels = go.Figure(), [date1.strftime('%Y-%m'), date2.strftime('%Y-%m')]
+        if group_var != "none" and group_var in df.columns and group_var in ['Division', 'Type', 'Item', 'Function']:
+            all_categories = set()
+            if not df1.empty: all_categories.update(df1[group_var].unique())
+            if not df2.empty: all_categories.update(df2[group_var].unique())
+            for category in sorted(all_categories):
+                val1 = df1[df1[group_var] == category][variable].sum() if not df1.empty and category in df1[group_var].values else 0
+                val2 = df2[df2[group_var] == category][variable].sum() if not df2.empty and category in df2[group_var].values else 0
+                fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=f"{category}",
+                    text=[f"{val1:.1f}", f"{val2:.1f}"], textposition='auto'))
+            fig.update_layout(barmode='group')
+        elif stack_var != "none" and stack_var in df.columns and stack_var in ['Division', 'Type', 'Item', 'Function']:
+            all_categories = set()
+            if not df1.empty: all_categories.update(df1[stack_var].unique())
+            if not df2.empty: all_categories.update(df2[stack_var].unique())
+            for category in sorted(all_categories):
+                val1 = df1[df1[stack_var] == category][variable].sum() if not df1.empty and category in df1[stack_var].values else 0
+                val2 = df2[df2[stack_var] == category][variable].sum() if not df2.empty and category in df2[stack_var].values else 0
+                fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=f"{category}",
+                    text=[f"{val1:.1f}", f"{val2:.1f}"], textposition='auto'))
+            fig.update_layout(barmode='stack')
         else:
-            # Simple comparison - just sum all values for each date
             val1 = df1[variable].sum() if not df1.empty else 0
             val2 = df2[variable].sum() if not df2.empty else 0
-            
-            fig.add_trace(go.Bar(
-                x=date_labels,
-                y=[val1, val2],
-                name=variable.replace('_', ' ').title(),
-                marker_color=['#1f77b4', '#ff7f0e'],
-                text=[f"{val1:.1f}", f"{val2:.1f}"],
-                textposition='auto',
-            ))
-        
-        fig.update_layout(
-            title=f"{variable.replace('_', ' ').title()} Comparison",
-            xaxis_title="Month",
-            yaxis_title=variable.replace('_', ' ').title(),
-            template="plotly_white",
-            height=300,
-            showlegend=True,
-            xaxis=dict(type='category')  # Force categorical x-axis
-        )
-        
+            fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=var_label,
+                marker_color=['#1f77b4', '#ff7f0e'], text=[f"{val1:.1f}", f"{val2:.1f}"], textposition='auto'))
+        fig.update_layout(title=f"{var_label} Comparison - {selected_type}", xaxis_title="Month", yaxis_title="Value",
+            template="plotly_white", height=300, showlegend=True, xaxis=dict(type='category'))
         return fig
     
-    # Generate charts
-    amount_chart = create_comparison_chart_updated(df_date1, df_date2, 'Amount_total', date1, date2)
-    income_chart = create_comparison_chart_updated(df_date1, df_date2, 'Income_total', date1, date2)
-    
-    # Create dumbbell charts using updated function
-    amount_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, 'Amount_total', date1, date2, group_var)
-    income_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, 'Income_total', date1, date2, group_var)
+    amount_chart = create_comparison_chart(df_date1, df_date2, amount_col, "Amount")
+    income_chart = create_comparison_chart(df_date1, df_date2, income_col, "Income")
+    amount_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, amount_col, date1, date2, group_var, selected_type, "Amount")
+    income_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, income_col, date1, date2, group_var, selected_type, "Income")
     
     return value_boxes, amount_chart, income_chart, amount_dumbbell, income_dumbbell, comparison_text
 
-# Callback for save analysis button (placeholder)
-@callback(
-    Output("save-analysis-btn", "children"),
-    Input("save-analysis-btn", "n_clicks"),
-    State("analysis-textbox", "value"),
-    prevent_initial_call=True
-)
+@callback(Output("save-analysis-btn", "children"), Input("save-analysis-btn", "n_clicks"),
+    State("analysis-textbox", "value"), prevent_initial_call=True)
 def save_analysis(n_clicks, analysis_text):
-    if n_clicks:
-        # Here you would implement actual saving functionality
-        # For now, just provide feedback
-        return "Analysis Saved!"
-    return "Save Analysis"
+    return "Analysis Saved!" if n_clicks else "Save Analysis"
 
-# Callback for save comparison button (placeholder)
-@callback(
-    Output("save-comparison-btn", "children"),
-    Input("save-comparison-btn", "n_clicks"),
-    State("comparison-textbox", "value"),
-    prevent_initial_call=True
-)
+@callback(Output("save-comparison-btn", "children"), Input("save-comparison-btn", "n_clicks"),
+    State("comparison-textbox", "value"), prevent_initial_call=True)
 def save_comparison(n_clicks, comparison_text):
-    if n_clicks:
-        # Here you would implement actual saving functionality
-        # For now, just provide feedback
-        return "Comparison Saved!"
-    return "Save Comparison"
+    return "Comparison Saved!" if n_clicks else "Save Comparison"
 
 if __name__ == "__main__":
     app.run(debug=True)
