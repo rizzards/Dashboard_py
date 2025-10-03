@@ -14,7 +14,7 @@ app = dash.Dash(__name__)
 
 # Load data from CSV file
 try:
-    sample_data = pd.read_csv(r'C:\Users\srizz\Documents\GitHub\Dashboard_py\Dashboard_py\Example_df.csv')
+    sample_data = pd.read_csv('Example_df.csv')
     
     # Convert Date column to proper datetime format (from "2020-03" to datetime)
     sample_data['Date'] = pd.to_datetime(sample_data['Date'], format='%Y-%m')
@@ -57,6 +57,18 @@ max_year = sample_data['date'].dt.year.max()
 
 # Create year range marks for the slider
 year_marks = {year: {'label': str(year)} for year in range(min_year, max_year + 1)}
+
+# Helper function to format numbers
+def format_number(value):
+    """Format numbers to billions, millions, or thousands"""
+    if abs(value) >= 1e9:
+        return f"{value/1e9:.2f}B"
+    elif abs(value) >= 1e6:
+        return f"{value/1e6:.2f}M"
+    elif abs(value) >= 1e3:
+        return f"{value/1e3:.2f}K"
+    else:
+        return f"{value:.2f}"
 
 # Helper Functions (defined before layout)
 def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old, income_new, date1, date2, 
@@ -486,6 +498,12 @@ app.layout = dmc.MantineProvider(
                                                                     
                                                                 ], withBorder=True, inheritPadding=True, py="md"),
                                                                 
+                                                                # Summary Boxes Section
+                                                                dmc.CardSection([
+                                                                    dmc.Title("Summary Metrics", order=5, mb="sm"),
+                                                                    html.Div(id="history-summary-boxes")
+                                                                ], inheritPadding=True, pt="xs"),
+                                                                
                                                                 dmc.CardSection([
                                                                     dmc.Title("Amount Analysis", order=5, mb="sm"),
                                                                     dcc.Graph(
@@ -735,7 +753,8 @@ def update_filter_values(filter_var):
     return [], True, []
 
 @callback(
-    [Output("amount-barchart", "figure"), Output("income-barchart", "figure"), Output("ratio-chart", "figure")],
+    [Output("history-summary-boxes", "children"), Output("amount-barchart", "figure"), 
+     Output("income-barchart", "figure"), Output("ratio-chart", "figure")],
     [Input("variable-selector", "value"), Input("filter-selector", "value"), Input("filter-values-selector", "value"),
      Input("stack-selector", "value"), Input("group-selector", "value"), Input("year-range-slider", "value")]
 )
@@ -757,27 +776,63 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
     
     df['month'] = df['date'].dt.to_period('M').astype(str)
     
+    # Calculate summary statistics
+    avg_amount = df[amount_col].mean()
+    avg_income = df[income_col].mean()
+    avg_ratio = (df[income_col].sum() / df[amount_col].sum()) if df[amount_col].sum() != 0 else 0
+    
+    # Create summary boxes
+    summary_boxes = dmc.SimpleGrid([
+        dmc.Card([dmc.Stack([
+            dmc.Text(f"Average Amount - {selected_type}", size="sm", c="dimmed"),
+            dmc.Text(format_number(avg_amount), size="xl", fw=700, c="blue"),
+            dmc.Text(f"Per period average", size="xs", c="dimmed")
+        ], gap="xs")], withBorder=True, shadow="sm", radius="md", p="md"),
+        dmc.Card([dmc.Stack([
+            dmc.Text(f"Average Income - {selected_type}", size="sm", c="dimmed"),
+            dmc.Text(format_number(avg_income), size="xl", fw=700, c="orange"),
+            dmc.Text(f"Per period average", size="xs", c="dimmed")
+        ], gap="xs")], withBorder=True, shadow="sm", radius="md", p="md"),
+        dmc.Card([dmc.Stack([
+            dmc.Text(f"Return Ratio - {selected_type}", size="sm", c="dimmed"),
+            dmc.Text(f"{avg_ratio*100:.2f}%", size="xl", fw=700, c="green"),
+            dmc.Text(f"Income/Amount ratio", size="xs", c="dimmed")
+        ], gap="xs")], withBorder=True, shadow="sm", radius="md", p="md"),
+    ], cols=3, spacing="sm", mb="lg")
+    
     def create_bar_chart(variable_col, title):
         fig = go.Figure()
         if stack_var != "none" and stack_var in df.columns and stack_var in ['Division', 'Type', 'Item', 'Function']:
             stacked_data = df.groupby(['month', stack_var])[variable_col].sum().unstack(fill_value=0)
             for category in stacked_data.columns:
                 fig.add_trace(go.Bar(x=stacked_data.index, y=stacked_data[category], name=f"{category}",
-                    text=stacked_data[category].round(1), textposition='auto'))
+                    text=[format_number(v) for v in stacked_data[category]], textposition='auto'))
             fig.update_layout(barmode='stack')
         elif group_var != "none" and group_var in df.columns and group_var in ['Division', 'Type', 'Item', 'Function']:
             for category in sorted(df[group_var].unique()):
                 category_data = df[df[group_var] == category]
                 monthly_data = category_data.groupby('month')[variable_col].sum().reset_index()
                 fig.add_trace(go.Bar(x=monthly_data['month'], y=monthly_data[variable_col], name=f"{category}",
-                    text=monthly_data[variable_col].round(1), textposition='auto'))
+                    text=[format_number(v) for v in monthly_data[variable_col]], textposition='auto'))
             fig.update_layout(barmode='group')
         else:
             monthly_data = df.groupby('month')[variable_col].sum().reset_index()
             fig.add_trace(go.Bar(x=monthly_data['month'], y=monthly_data[variable_col], name=title,
                 marker_color='#1f77b4' if 'Amount' in title else '#ff7f0e',
-                text=monthly_data[variable_col].round(1), textposition='auto'))
-        fig.update_layout(title=title, xaxis_title="Month", yaxis_title="Value", template="plotly_white",
+                text=[format_number(v) for v in monthly_data[variable_col]], textposition='auto'))
+        
+        # Format y-axis
+        max_val = df.groupby('month')[variable_col].sum().max() if group_var == "none" else df[variable_col].max()
+        if max_val >= 1e9:
+            fig.update_yaxes(tickformat=".2fB", title_text="Value (Billions)")
+        elif max_val >= 1e6:
+            fig.update_yaxes(tickformat=".2fM", title_text="Value (Millions)")
+        elif max_val >= 1e3:
+            fig.update_yaxes(tickformat=".2fK", title_text="Value (Thousands)")
+        else:
+            fig.update_yaxes(title_text="Value")
+            
+        fig.update_layout(title=title, xaxis_title="Month", template="plotly_white",
             showlegend=True, height=350, margin=dict(l=50, r=50, t=60, b=50))
         fig.update_xaxes(tickangle=45)
         return fig
@@ -790,21 +845,24 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
         for category in sorted(df[group_var].unique()):
             category_data = df[df[group_var] == category]
             monthly_data = category_data.groupby('month').agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
-            monthly_data['ratio'] = monthly_data[income_col] / monthly_data[amount_col].replace(0, np.nan)
+            monthly_data['ratio'] = (monthly_data[income_col] / monthly_data[amount_col].replace(0, np.nan)) * 100
             ratio_fig.add_trace(go.Scatter(x=monthly_data['month'], y=monthly_data['ratio'],
-                mode='lines+markers', name=f"{category}", line=dict(width=2), marker=dict(size=6)))
+                mode='lines+markers', name=f"{category}", line=dict(width=2), marker=dict(size=6),
+                text=[f"{v:.2f}%" for v in monthly_data['ratio']], textposition='top center'))
     else:
         monthly_data = df.groupby('month').agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
-        monthly_data['ratio'] = monthly_data[income_col] / monthly_data[amount_col].replace(0, np.nan)
+        monthly_data['ratio'] = (monthly_data[income_col] / monthly_data[amount_col].replace(0, np.nan)) * 100
         ratio_fig.add_trace(go.Scatter(x=monthly_data['month'], y=monthly_data['ratio'],
-            mode='lines+markers', name='Return Ratio', line=dict(color='#2ca02c', width=3), marker=dict(size=8)))
+            mode='lines+markers', name='Return Ratio', line=dict(color='#2ca02c', width=3), marker=dict(size=8),
+            text=[f"{v:.2f}%" for v in monthly_data['ratio']], textposition='top center'))
     
-    ratio_fig.update_layout(title=f"Return Ratio (Income/Amount) - {selected_type}", xaxis_title="Month", yaxis_title="Ratio",
-        template="plotly_white", height=250, margin=dict(l=50, r=50, t=60, b=50), showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.4, xanchor="center", x=0.5))
+    ratio_fig.update_layout(title=f"Return Ratio (Income/Amount) - {selected_type}", xaxis_title="Month", 
+        yaxis_title="Ratio (%)", template="plotly_white", height=250, margin=dict(l=50, r=50, t=60, b=50), 
+        showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.4, xanchor="center", x=0.5))
     ratio_fig.update_xaxes(tickangle=45)
+    ratio_fig.update_yaxes(ticksuffix="%")
     
-    return amount_chart, income_chart, ratio_fig
+    return summary_boxes, amount_chart, income_chart, ratio_fig
 
 @callback(Output("comparison-date-selector", "data"), Input("main-tabs", "value"))
 def populate_comparison_dates(active_tab):
@@ -872,8 +930,8 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
     
     amount_change = ((amount_new - amount_old) / amount_old * 100) if amount_old != 0 else 0
     income_change = ((income_new - income_old) / income_old * 100) if income_old != 0 else 0
-    ratio_old = (income_old / amount_old) if amount_old != 0 else 0
-    ratio_new = (income_new / amount_new) if amount_new != 0 else 0
+    ratio_old = (income_old / amount_old) * 100 if amount_old != 0 else 0
+    ratio_new = (income_new / amount_new) * 100 if amount_new != 0 else 0
     ratio_difference = ratio_new - ratio_old
     
     comparison_text = generate_enhanced_comparison_text_updated(
@@ -888,7 +946,7 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
                 DashIconify(icon="material-symbols:trending-up" if amount_change >= 0 else "material-symbols:trending-down",
                     width=24, color="green" if amount_change >= 0 else "red")
             ], justify="space-between", align="center"),
-            dmc.Text(f"{amount_old:.1f} → {amount_new:.1f}", size="xs", c="dimmed")
+            dmc.Text(f"{format_number(amount_old)} → {format_number(amount_new)}", size="xs", c="dimmed")
         ], gap="xs")], withBorder=True, shadow="sm", radius="md", p="md"),
         dmc.Card([dmc.Stack([
             dmc.Text(f"Income Change - {selected_type}", size="sm", c="dimmed"),
@@ -897,16 +955,16 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
                 DashIconify(icon="material-symbols:trending-up" if income_change >= 0 else "material-symbols:trending-down",
                     width=24, color="green" if income_change >= 0 else "red")
             ], justify="space-between", align="center"),
-            dmc.Text(f"{income_old:.1f} → {income_new:.1f}", size="xs", c="dimmed")
+            dmc.Text(f"{format_number(income_old)} → {format_number(income_new)}", size="xs", c="dimmed")
         ], gap="xs")], withBorder=True, shadow="sm", radius="md", p="md"),
         dmc.Card([dmc.Stack([
             dmc.Text(f"Return Ratio Change - {selected_type}", size="sm", c="dimmed"),
             dmc.Group([
-                dmc.Text(f"{ratio_difference:+.2f}", size="xl", fw=700, c="green" if ratio_difference >= 0 else "red"),
+                dmc.Text(f"{ratio_difference:+.2f}%", size="xl", fw=700, c="green" if ratio_difference >= 0 else "red"),
                 DashIconify(icon="material-symbols:trending-up" if ratio_difference >= 0 else "material-symbols:trending-down",
                     width=24, color="green" if ratio_difference >= 0 else "red")
             ], justify="space-between", align="center"),
-            dmc.Text(f"{ratio_old:.2f} → {ratio_new:.2f}", size="xs", c="dimmed")
+            dmc.Text(f"{ratio_old:.2f}% → {ratio_new:.2f}%", size="xs", c="dimmed")
         ], gap="xs")], withBorder=True, shadow="sm", radius="md", p="md"),
     ], cols=3, spacing="sm", mb="lg")
     
@@ -920,7 +978,7 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
                 val1 = df1[df1[group_var] == category][variable].sum() if not df1.empty and category in df1[group_var].values else 0
                 val2 = df2[df2[group_var] == category][variable].sum() if not df2.empty and category in df2[group_var].values else 0
                 fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=f"{category}",
-                    text=[f"{val1:.1f}", f"{val2:.1f}"], textposition='auto'))
+                    text=[format_number(val1), format_number(val2)], textposition='auto'))
             fig.update_layout(barmode='group')
         elif stack_var != "none" and stack_var in df.columns and stack_var in ['Division', 'Type', 'Item', 'Function']:
             all_categories = set()
@@ -930,14 +988,26 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
                 val1 = df1[df1[stack_var] == category][variable].sum() if not df1.empty and category in df1[stack_var].values else 0
                 val2 = df2[df2[stack_var] == category][variable].sum() if not df2.empty and category in df2[stack_var].values else 0
                 fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=f"{category}",
-                    text=[f"{val1:.1f}", f"{val2:.1f}"], textposition='auto'))
+                    text=[format_number(val1), format_number(val2)], textposition='auto'))
             fig.update_layout(barmode='stack')
         else:
             val1 = df1[variable].sum() if not df1.empty else 0
             val2 = df2[variable].sum() if not df2.empty else 0
             fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=var_label,
-                marker_color=['#1f77b4', '#ff7f0e'], text=[f"{val1:.1f}", f"{val2:.1f}"], textposition='auto'))
-        fig.update_layout(title=f"{var_label} Comparison - {selected_type}", xaxis_title="Month", yaxis_title="Value",
+                marker_color=['#1f77b4', '#ff7f0e'], text=[format_number(val1), format_number(val2)], textposition='auto'))
+        
+        # Format y-axis
+        max_val = max(val1, val2) if 'val1' in locals() and 'val2' in locals() else 0
+        if max_val >= 1e9:
+            fig.update_yaxes(tickformat=".2fB", title_text="Value (Billions)")
+        elif max_val >= 1e6:
+            fig.update_yaxes(tickformat=".2fM", title_text="Value (Millions)")
+        elif max_val >= 1e3:
+            fig.update_yaxes(tickformat=".2fK", title_text="Value (Thousands)")
+        else:
+            fig.update_yaxes(title_text="Value")
+            
+        fig.update_layout(title=f"{var_label} Comparison - {selected_type}", xaxis_title="Month", 
             template="plotly_white", height=300, showlegend=True, xaxis=dict(type='category'))
         return fig
     
