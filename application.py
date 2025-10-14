@@ -100,25 +100,49 @@ def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old
     else:
         text_parts.append(f"The Return Ratio (Income/Amount) declined from {ratio_old:.2f} to {ratio_new:.2f}, representing a decrease of {abs(ratio_change):.2f}.\n\n")
     
-    if group_var != "none" and group_var in ['Division', 'Type', 'Item', 'Function'] and not df1.empty and not df2.empty:
-        text_parts.append("PROPORTION ANALYSIS BY GROUPS:\n" + "=" * 30 + "\n\n")
+    # Determine which grouping variable to analyze (default to Item if none selected)
+    analysis_group_var = group_var if group_var != "none" else "Item"
+    
+    if analysis_group_var in ['Division', 'Type', 'Item', 'Function'] and not df1.empty and not df2.empty:
+        text_parts.append(f"PROPORTION ANALYSIS BY {analysis_group_var.upper()}:\n" + "=" * 30 + "\n\n")
         
         for col, label in [(amount_col, "Amount"), (income_col, "Income")]:
-            groups1 = df1.groupby(group_var)[col].sum()
+            groups1 = df1.groupby(analysis_group_var)[col].sum()
             total1 = df1[col].sum()
             props1 = (groups1 / total1 * 100) if total1 > 0 else pd.Series(dtype=float)
             
-            groups2 = df2.groupby(group_var)[col].sum()
+            groups2 = df2.groupby(analysis_group_var)[col].sum()
             total2 = df2[col].sum()
             props2 = (groups2 / total2 * 100) if total2 > 0 else pd.Series(dtype=float)
             
-            text_parts.append(f"{label} ({selected_type}) Proportion Changes:\n")
+            text_parts.append(f"{label} ({selected_type}) Proportion Changes by {analysis_group_var}:\n")
             for group in sorted(set(props1.index) | set(props2.index)):
                 prop1, prop2 = props1.get(group, 0), props2.get(group, 0)
                 amt1, amt2 = groups1.get(group, 0), groups2.get(group, 0)
                 prop_change = prop2 - prop1
                 change_desc = "increased" if prop_change > 0 else "decreased" if prop_change < 0 else "remained stable"
-                text_parts.append(f"• {group}: {prop1:.1f}% → {prop2:.1f}% ({change_desc} by {abs(prop_change):.1f}pp), amounts: {amt1:.1f} → {amt2:.1f}\n")
+                text_parts.append(f"• {group}: {prop1:.1f}% → {prop2:.1f}% ({change_desc} by {abs(prop_change):.1f}pp), amounts: {format_number(amt1)} → {format_number(amt2)}\n")
+            text_parts.append("\n")
+    
+    # Always analyze Division contribution (stacked bar chart)
+    if 'Division' in df1.columns and 'Division' in df2.columns and not df1.empty and not df2.empty:
+        text_parts.append("DIVISION PERCENTAGE CONTRIBUTION:\n" + "=" * 30 + "\n\n")
+        
+        for col, label in [(amount_col, "Amount"), (income_col, "Income")]:
+            div1 = df1.groupby('Division')[col].sum()
+            total1 = div1.sum()
+            pct1 = (div1 / total1 * 100) if total1 > 0 else pd.Series(dtype=float)
+            
+            div2 = df2.groupby('Division')[col].sum()
+            total2 = div2.sum()
+            pct2 = (div2 / total2 * 100) if total2 > 0 else pd.Series(dtype=float)
+            
+            text_parts.append(f"{label} ({selected_type}) Division Contribution:\n")
+            for division in sorted(set(pct1.index) | set(pct2.index)):
+                p1, p2 = pct1.get(division, 0), pct2.get(division, 0)
+                pct_change = p2 - p1
+                change_desc = "increased" if pct_change > 0 else "decreased" if pct_change < 0 else "remained stable"
+                text_parts.append(f"• {division}: {p1:.1f}% → {p2:.1f}% ({change_desc} by {abs(pct_change):.1f}pp)\n")
             text_parts.append("\n")
     
     text_parts.extend(["SUMMARY:\n", "=" * 30 + "\n", "• [Add your key insights here]\n", "• [Note any significant patterns]\n", "• [Record actionable findings]"])
