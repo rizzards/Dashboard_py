@@ -22,28 +22,16 @@ try:
     sample_data = sample_data.rename(columns={'Date': 'date'})
     sample_data = sample_data.sort_values('date').reset_index(drop=True)
     print(f"Successfully loaded {len(sample_data)} records from Example_df.csv")
+
+    tool_sample = pd.read_csv('Example_correction.csv')
+    tool_sample['Date'] = pd.to_datetime(tool_sample['Date'], format='%Y-%m')
+    tool_sample = tool_sample.rename(columns={'Date': 'date'})
+    tool_sample = tool_sample.sort_values('date').reset_index(drop=True)
+    print(f"Successfully loaded {len(tool_sample)} records from Example_correction.csv")
+
 except FileNotFoundError:
-    print("Example_df.csv not found. Creating sample data.")
-    np.random.seed(42)
-    date_range = pd.date_range(start='2020-01-01', end='2024-12-31', freq='M')
-    n_records = len(date_range) * 10
-    sample_dates = np.random.choice(date_range, n_records, replace=True)
-    sample_data = pd.DataFrame({
-        'date': sample_dates,
-        'Division': np.random.choice(['North', 'South', 'East', 'West'], n_records),
-        'Type': np.random.choice(['Type A', 'Type B', 'Type C'], n_records),
-        'Item': np.random.choice(['Item 1', 'Item 2', 'Item 3', 'Item 4'], n_records),
-        'Function': np.random.choice(['Sales', 'Marketing', 'Operations', 'Support'], n_records),
-        'Amount_total': np.random.normal(1000, 200, n_records),
-        'Amount_1': np.random.normal(300, 50, n_records),
-        'Amount_2': np.random.normal(400, 60, n_records),
-        'Amount_3': np.random.normal(300, 40, n_records),
-        'Income_total': np.random.normal(1200, 250, n_records),
-        'Income_1': np.random.normal(400, 80, n_records),
-        'Income_2': np.random.normal(500, 90, n_records),
-        'Income_3': np.random.normal(300, 50, n_records),
-    })
-    sample_data = sample_data.sort_values('date').reset_index(drop=True)
+    print("Example_df.csv not found.")
+    print("Example_correction.csv not found.")
 
 min_year = sample_data['date'].dt.year.min()
 max_year = sample_data['date'].dt.year.max()
@@ -368,8 +356,40 @@ app.layout = dmc.MantineProvider(
                             ], gap="md")
                         ]),
                         dmc.TabsPanel(value="tool", children=[
-                            dmc.Center([dmc.Stack([dmc.Title("Tool Tab", order=2), dmc.Text("This tab is ready for tool features implementation.", c="dimmed")],
-                                align="center")], style={"height": "400px"})
+                            dmc.Stack([
+                                dmc.Card([
+                                    dmc.CardSection([
+                                        dmc.Title("Tool Controls", order=4, mb="md"),
+                                        dmc.Grid([
+                                            dmc.GridCol(span=4, children=[
+                                                dmc.Text("Filter by Division:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="tool-division-filter", placeholder="Select Division", value="none", size="sm",
+                                                    data=[{"value": "none", "label": "All Divisions"}] + 
+                                                        [{"value": val, "label": val} for val in sorted(sample_data['Division'].unique())])
+                                            ]),
+                                            dmc.GridCol(span=4, children=[
+                                                dmc.Text("Filter by Item:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="tool-item-filter", placeholder="Select Item", value="none", size="sm",
+                                                    data=[{"value": "none", "label": "All Items"}] + 
+                                                        [{"value": val, "label": val} for val in sorted(sample_data['Item'].unique())])
+                                            ]),
+                                            dmc.GridCol(span=4, children=[
+                                                dmc.Text("Filter by Function:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="tool-function-filter", placeholder="Select Function", value="none", size="sm",
+                                                    data=[{"value": "none", "label": "All Functions"}] + 
+                                                        [{"value": val, "label": val} for val in sorted(sample_data['Function'].unique())])
+                                            ]),
+                                        ], gutter="md", mb="lg"),
+                                    ], withBorder=True, inheritPadding=True, py="md"),
+                                ], withBorder=True, shadow="sm", radius="md", mb="md"),
+                                
+                                dmc.Card([
+                                    dmc.CardSection([
+                                        dmc.Title("Income Analysis: Original vs Corrected", order=4, mb="md"),
+                                        dcc.Graph(id="tool-income-chart", style={"height": "500px"})
+                                    ], inheritPadding=True, pt="xs"),
+                                ], withBorder=True, shadow="sm", radius="md")
+                            ], gap="md")
                         ]),
                     ])
                 ]),
@@ -708,6 +728,88 @@ def save_analysis(n_clicks, analysis_text):
     State("comparison-textbox", "value"), prevent_initial_call=True)
 def save_comparison(n_clicks, comparison_text):
     return "Comparison Saved!" if n_clicks else "Save Comparison"
+
+@callback(
+    Output("tool-income-chart", "figure"),
+    [Input("tool-division-filter", "value"), Input("tool-item-filter", "value"), Input("tool-function-filter", "value")]
+)
+def update_tool_chart(division_filter, item_filter, function_filter):
+    # Filter sample_data
+    df_main = sample_data.copy()
+    if division_filter != "none":
+        df_main = df_main[df_main['Division'] == division_filter]
+    if item_filter != "none":
+        df_main = df_main[df_main['Item'] == item_filter]
+    if function_filter != "none":
+        df_main = df_main[df_main['Function'] == function_filter]
+    
+    # Filter tool_sample
+    df_corr = tool_sample.copy()
+    if division_filter != "none":
+        df_corr = df_corr[df_corr['Division'] == division_filter]
+    if item_filter != "none":
+        df_corr = df_corr[df_corr['Item'] == item_filter]
+    if function_filter != "none":
+        df_corr = df_corr[df_corr['Function'] == function_filter]
+    
+    # Aggregate by date
+    main_agg = df_main.groupby('date')['Income_total'].sum().reset_index()
+    main_agg['month'] = main_agg['date'].dt.to_period('M').astype(str)
+    
+    corr_agg = df_corr.groupby('date')['Income_corr'].sum().reset_index()
+    corr_agg['month'] = corr_agg['date'].dt.to_period('M').astype(str)
+    
+    # Merge the two datasets
+    merged = pd.merge(main_agg[['month', 'Income_total']], corr_agg[['month', 'Income_corr']], 
+                     on='month', how='outer').fillna(0)
+    merged = merged.sort_values('month')
+    
+    # Create stacked bar chart
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        x=merged['month'],
+        y=merged['Income_total'],
+        name='Income Total (Original)',
+        marker_color='#1f77b4',
+        text=[format_number(v) for v in merged['Income_total']],
+        textposition='inside'
+    ))
+    
+    fig.add_trace(go.Bar(
+        x=merged['month'],
+        y=merged['Income_corr'],
+        name='Income Correction',
+        marker_color='#ff7f0e',
+        text=[format_number(v) for v in merged['Income_corr']],
+        textposition='inside'
+    ))
+    
+    # Format y-axis
+    all_values = list(merged['Income_total']) + list(merged['Income_corr'])
+    max_val = max(all_values) if all_values else 0
+    
+    if max_val >= 1e9:
+        fig.update_yaxes(tickformat=".2s", title_text="Income (Billions)")
+    elif max_val >= 1e6:
+        fig.update_yaxes(tickformat=".2s", title_text="Income (Millions)")
+    elif max_val >= 1e3:
+        fig.update_yaxes(tickformat=".2s", title_text="Income (Thousands)")
+    else:
+        fig.update_yaxes(title_text="Income")
+    
+    fig.update_layout(
+        title="Income Analysis: Original vs Corrected",
+        xaxis_title="Month",
+        barmode='stack',
+        template="plotly_white",
+        height=500,
+        showlegend=True,
+        margin=dict(l=50, r=50, t=60, b=50)
+    )
+    fig.update_xaxes(tickangle=45)
+    
+    return fig
 
 # ============================================================================
 # RUN APP
