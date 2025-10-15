@@ -145,7 +145,7 @@ def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old
         text_parts.append(f"The Return Ratio (Income/Amount) declined from {ratio_old:.2f} to {ratio_new:.2f}, representing a decrease of {abs(ratio_change):.2f}.\n\n")
     
     # Determine which grouping variable to analyze (default to Item if none selected)
-    analysis_group_var = group_var if group_var != "none" else "Item"
+    analysis_group_var = group_var if group_var != "none" else "Function"
     
     if analysis_group_var in ['Division', 'Type', 'Item', 'Function'] and not df1.empty and not df2.empty:
         text_parts.append(f"PROPORTION ANALYSIS BY {analysis_group_var.upper()}:\n" + "=" * 30 + "\n\n")
@@ -359,7 +359,9 @@ app.layout = dmc.MantineProvider(
                                                         value=[min_year, max_year],
                                                         marks=[{"value": year, "label": str(year)} for year in range(min_year, max_year + 1)],
                                                         mb="md",
-                                                        size="sm"
+                                                        minRange=1,
+                                                        size="md",
+                                                        style={"width": "100%"}
                                                     )
                                                 ], gap="xs", style={"flex": 1}),
                                             ], justify="space-between", align="flex-start", mb="lg"),
@@ -390,7 +392,7 @@ app.layout = dmc.MantineProvider(
                                         dmc.CardSection([dmc.Title("Return Ratio (Income/Amount)", order=5, mb="sm"), dcc.Graph(id="ratio-chart", style={"height": "250px"})],
                                             inheritPadding=True, pt="xs"),
                                         dmc.CardSection([
-                                            dmc.Button("Export All Charts Data (ZIP)", id="history-export-btn", variant="outline", size="sm", fullWidth=True),
+                                            dmc.Button("Export History Data - Excel", id="history-export-btn", variant="outline", size="sm", fullWidth=True),
                                             dcc.Download(id="download-history-data"),
                                         ], inheritPadding=True, pt="xs"),
                                     ], withBorder=True, shadow="sm", radius="md", mb="md")
@@ -467,9 +469,7 @@ app.layout = dmc.MantineProvider(
                                             dmc.GridCol([dmc.Title("Income by Division", order=6, mb="sm"), dcc.Graph(id="income-division-chart", style={"height": "350px"})], span=6),
                                         ], gutter="md")], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
-                                        dmc.Button("Export Data to CSV", id="export-csv-btn", variant="outline", size="sm", mr="sm"),
-                                        dmc.Button("Export Data to Excel", id="export-excel-btn", variant="outline", size="sm"),
-                                        dcc.Download(id="download-dataframe-csv"),
+                                        dmc.Button("Export Comparison Data - Excel", id="export-excel-btn", variant="outline", size="sm"),
                                         dcc.Download(id="download-dataframe-xlsx"),
                                     ], inheritPadding=True, pt="xs"),
                                 ], withBorder=True, shadow="sm", radius="md")
@@ -490,7 +490,9 @@ app.layout = dmc.MantineProvider(
                                                 value=[min_year, max_year],
                                                 marks=[{"value": year, "label": str(year)} for year in range(min_year, max_year + 1)],
                                                 mb="md",
-                                                size="sm"
+                                                minRange=1,
+                                                size="md",
+                                                style={"width": "100%"}
                                             )
                                         ], gap="xs", mb="lg"),
                                         dmc.Grid([
@@ -522,7 +524,7 @@ app.layout = dmc.MantineProvider(
                                         dcc.Graph(id="tool-income-chart", style={"height": "500px"})
                                     ], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
-                                        dmc.Button("Export Tool Data (ZIP)", id="tool-export-btn", variant="outline", size="sm", fullWidth=True),
+                                        dmc.Button("Export Tool Data - Excel", id="tool-export-btn", variant="outline", size="sm", fullWidth=True),
                                         dcc.Download(id="download-tool-data"),
                                     ], inheritPadding=True, pt="xs"),
                                 ], withBorder=True, shadow="sm", radius="md")
@@ -663,8 +665,8 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
             mode='lines+markers', name='Return Ratio', line=dict(color=get_color_sequence('line', 1)[0], width=3), marker=dict(size=8)))
     
     ratio_fig.update_layout(title=f"Return Ratio (Income/Amount) - {selected_type}", xaxis_title="Month", yaxis_title="Ratio (%)",
-        template="plotly_white", height=250, margin=dict(l=50, r=50, t=60, b=80), showlegend=True,
-        legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5))
+        template="plotly_white", height=250, margin=dict(l=50, r=50, t=60, b=100), showlegend=True,
+        legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5))
     ratio_fig.update_xaxes(tickangle=45)
     ratio_fig.update_yaxes(ticksuffix="%")
     
@@ -866,7 +868,7 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
     
     return value_boxes, amount_chart, income_chart, amount_dumbbell, income_dumbbell, amount_division, income_division, comparison_text
 
-@callback(Output("download-dataframe-csv", "data"), Input("export-csv-btn", "n_clicks"),
+@callback(Output("download-dataframe-xlsx", "data"), Input("export-excel-btn", "n_clicks"),
     [State("comparison-type-selector", "value"), State("comparison-date-selector", "value"),
      State("comparison-filter-selector", "value"), State("comparison-filter-values-selector", "value"),
      State("comparison-group-selector", "value"), State("comparison-stack-selector", "value")], prevent_initial_call=True)
@@ -889,11 +891,7 @@ def export_comparison_excel(n_clicks, selected_type, selected_dates, filter_var,
         # Create Excel file with multiple sheets
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            # Sheet 1: Raw filtered data
-            df_combined = pd.concat([df_date1, df_date2])
-            df_combined.to_excel(writer, sheet_name='Raw Data', index=False)
-            
-            # Sheet 2: Amount & Income totals
+            # Sheet 1: Amount & Income totals
             amount_col = f'Amount_{selected_type}' if selected_type != 'Total' else 'Amount_total'
             income_col = f'Income_{selected_type}' if selected_type != 'Total' else 'Income_total'
             
@@ -904,7 +902,7 @@ def export_comparison_excel(n_clicks, selected_type, selected_dates, filter_var,
             })
             summary_data.to_excel(writer, sheet_name='Summary', index=False)
             
-            # Sheet 3: Division breakdown if available
+            # Sheet 2: Division breakdown if available
             if 'Division' in df.columns:
                 div_data = []
                 for date, df_temp in [(date1, df_date1), (date2, df_date2)]:
@@ -918,7 +916,7 @@ def export_comparison_excel(n_clicks, selected_type, selected_dates, filter_var,
                         })
                 pd.DataFrame(div_data).to_excel(writer, sheet_name='By Division', index=False)
             
-            # Sheet 4: Tool sample data if available
+            # Sheet 3: Tool sample data if available
             try:
                 tool_date1 = tool_sample[tool_sample['date'] == date1].copy()
                 tool_date2 = tool_sample[tool_sample['date'] == date2].copy()
@@ -934,13 +932,6 @@ def export_comparison_excel(n_clicks, selected_type, selected_dates, filter_var,
         output.seek(0)
         return dcc.send_bytes(output.getvalue(), f"comparison_data_{selected_type}_{datetime.now().strftime('%Y%m%d')}.xlsx")
 
-@callback(Output("download-dataframe-xlsx", "data"), Input("export-excel-btn", "n_clicks"),
-    [State("comparison-type-selector", "value"), State("comparison-date-selector", "value"),
-     State("comparison-filter-selector", "value"), State("comparison-filter-values-selector", "value"),
-     State("comparison-group-selector", "value"), State("comparison-stack-selector", "value")], prevent_initial_call=True)
-def export_comparison_excel_alt(n_clicks, selected_type, selected_dates, filter_var, filter_values, group_var, stack_var):
-    """Export all comparison chart data to multi-sheet Excel (duplicate of CSV for compatibility)"""
-    return export_comparison_excel(n_clicks, selected_type, selected_dates, filter_var, filter_values, group_var, stack_var)
 
 @callback(Output("download-history-data", "data"), Input("history-export-btn", "n_clicks"),
     [State("variable-selector", "value"), State("year-range-slider", "value"),
@@ -982,8 +973,6 @@ def export_history_data(n_clicks, selected_type, year_range, filter_var, filter_
             ratio_data['Month'] = ratio_data['Month'].astype(str)
             ratio_data.to_excel(writer, sheet_name='Ratio Chart', index=False)
             
-            # Sheet 4: Raw filtered data
-            df.to_excel(writer, sheet_name='Raw Data', index=False)
         
         output.seek(0)
         return dcc.send_bytes(output.getvalue(), f"history_data_{selected_type}_{datetime.now().strftime('%Y%m%d')}.xlsx")
@@ -1035,9 +1024,6 @@ def export_tool_data(n_clicks, division_filter, item_filter, function_filter, ye
             merged['Total_with_Correction'] = merged['Income_total'] + merged['Income_corr']
             merged.to_excel(writer, sheet_name='Combined', index=False)
             
-            # Sheet 4 & 5: Raw data
-            df_main.to_excel(writer, sheet_name='Raw Original Data', index=False)
-            df_corr.to_excel(writer, sheet_name='Raw Correction Data', index=False)
         
         output.seek(0)
         return dcc.send_bytes(output.getvalue(), f"tool_data_{datetime.now().strftime('%Y%m%d')}.xlsx")
