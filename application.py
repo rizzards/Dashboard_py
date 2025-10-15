@@ -12,55 +12,14 @@ from datetime import datetime
 # COLOR CONFIGURATION
 # ============================================================================
 CHART_COLORS = {
-    # Professional Gray Palette (Primary)
-    'gray_darkest': '#2D3748',      # For primary emphasis
-    'gray_dark': '#4A5568',          # Main series color
-    'gray_medium': '#718096',        # Secondary series
-    'gray_light': '#A0AEC0',         # Tertiary series
-    'gray_lightest': '#CBD5E0',      # Background/subtle
-    'gray_very_light': '#E2E8F0',    # Very subtle
-    
-    # Red Accent Palette
-    'red_primary': '#E53E3E',        # Main accent/comparison new value
-    'red_medium': '#FC8181',         # Soft emphasis
-    'red_light': '#FEB2B2',          # Light accent
-    'red_pale': '#FBB6CE',           # Pastel pink
-    
-    # Pastel/Pale Accent Colors
-    'pastel_purple': '#B794F4',      # Purple accent
-    'pastel_blue': '#90CDF4',        # Blue accent
-    'pastel_green': '#9AE6B4',       # Green accent
-    'pastel_yellow': '#FAF089',      # Yellow accent
-    'pastel_orange': '#FBD38D',      # Orange accent
-    
-    # Pre-configured Color Sequences
+    # Comparison colors
     'comparison_colors': ['#718096', '#E53E3E'],  # Gray (baseline), Red (new)
     
-    'gray_sequence_5': [
-        '#2D3748',  # Darkest
-        '#4A5568',  # Dark
-        '#718096',  # Medium
-        '#A0AEC0',  # Light
-        '#CBD5E0',  # Lightest
-    ],
-    
-    'mixed_professional': [
-        '#4A5568',  # Gray dark (primary)
-        '#718096',  # Gray medium
-        '#A0AEC0',  # Gray light
-        '#E53E3E',  # Red accent
-        '#FBB6CE',  # Pale pink
-        '#B794F4',  # Pale purple
-        '#90CDF4',  # Pale blue
-    ],
-    
-    'stacked_balanced': [
-        '#4A5568',  # Gray primary
-        '#718096',  # Gray secondary
-        '#E53E3E',  # Red accent
-        '#A0AEC0',  # Gray light
-        '#FBB6CE',  # Pale pink
-    ],
+    # Series color sequences based on number of series
+    'sequence_8plus': ['#dbdbdb', '#adadad', '#838281', '#5b5958', '#373332', '#364a7c', '#556ea3', '#7794c2', '#9abddc', '#bde9f1'],
+    'sequence_6plus': ['#dbdbdb', '#a3a2a2', '#6f6d6d', '#403c3b', '#3d5387', '#6681b4', '#92b3d6', '#bde9f1'],
+    'sequence_4plus': ['#dbdbdb', '#919090', '#4f4c4b', '#4a6198', '#83a2cb', '#bde9f1'],
+    'sequence_2plus': ['#dbdbdb', '#6f6d6d', '#6681b4', '#bde9f1'],
 }
 
 def get_color_sequence(chart_type, n_colors=1, is_comparison=False):
@@ -73,25 +32,25 @@ def get_color_sequence(chart_type, n_colors=1, is_comparison=False):
         is_comparison: bool - True for comparison charts (2 dates)
     
     Returns:
-        list or str - color code(s)
+        list - color code(s)
     """
     if is_comparison:
         return CHART_COLORS['comparison_colors']
     
-    if chart_type == 'line':
-        # Lines work better with gray gradients
-        return CHART_COLORS['gray_sequence_5'][:n_colors]
-    
-    elif chart_type == 'stacked':
-        # Stacked bars: balanced mix
-        return CHART_COLORS['stacked_balanced'][:n_colors]
-    
-    elif chart_type == 'grouped':
-        # Grouped bars: gray sequence
-        return CHART_COLORS['gray_sequence_5'][:n_colors]
-    
-    else:  # Single bar or default
-        return [CHART_COLORS['gray_dark']]
+    # Select sequence based on number of colors needed
+    if n_colors > 8:
+        return CHART_COLORS['sequence_8plus'][:n_colors]
+    elif n_colors > 6:
+        return CHART_COLORS['sequence_6plus'][:n_colors]
+    elif n_colors > 4:
+        return CHART_COLORS['sequence_4plus'][:n_colors]
+    elif n_colors > 2:
+        return CHART_COLORS['sequence_2plus'][:n_colors]
+    elif n_colors == 2:
+        return CHART_COLORS['sequence_2plus'][:2]
+    else:
+        return [CHART_COLORS['sequence_2plus'][1]]  # Single color - use second from 2plus sequence
+
 
 # ============================================================================
 # INITIALIZATION
@@ -127,14 +86,26 @@ year_marks = {year: {'label': str(year)} for year in range(min_year, max_year + 
 # ============================================================================
 def format_number(value):
     """Format numbers to billions, millions, or thousands"""
-    if abs(value) >= 1e9:
+    if abs(value) >= 1e8:
         return f"{value/1e9:.2f}B"
-    elif abs(value) >= 1e6:
+    elif abs(value) >= 1e5:
         return f"{value/1e6:.2f}M"
-    elif abs(value) >= 1e3:
+    elif abs(value) >= 1e2:
         return f"{value/1e3:.2f}K"
     else:
         return f"{value:.2f}"
+
+def format_hover_value(value):
+    """Format hover values with one extra decimal compared to axis"""
+    if abs(value) >= 1e8:
+        return f"{value/1e9:.3f}B"
+    elif abs(value) >= 1e5:
+        return f"{value/1e6:.3f}M"
+    elif abs(value) >= 1e2:
+        return f"{value/1e3:.3f}K"
+    else:
+        return f"{value:.3f}"
+
 
 def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old, income_new, date1, date2, 
                                             filter_var, filter_values, group_var, df1, df2, selected_type, amount_col, income_col):
@@ -218,13 +189,66 @@ def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old
                 text_parts.append(f"• {division}: {p1:.1f}% → {p2:.1f}% ({change_desc} by {abs(pct_change):.1f}pp)\n")
             text_parts.append("\n")
     
+    # Add Tool Sample (Income Correction) Analysis
+    try:
+        # Filter tool_sample data for the same date range and criteria
+        tool_date1 = tool_sample[tool_sample['date'] == date1].copy()
+        tool_date2 = tool_sample[tool_sample['date'] == date2].copy()
+        
+        # Apply same filtering criteria
+        if filter_var != "none" and filter_values and filter_var in tool_date1.columns:
+            tool_date1 = tool_date1[tool_date1[filter_var].isin(filter_values)]
+            tool_date2 = tool_date2[tool_date2[filter_var].isin(filter_values)]
+        
+        if not tool_date1.empty or not tool_date2.empty:
+            text_parts.append("INCOME CORRECTION ANALYSIS (Tool Data):\n" + "=" * 30 + "\n\n")
+            
+            # Total income corrections
+            corr_total1 = tool_date1['Income_corr'].sum() if not tool_date1.empty else 0
+            corr_total2 = tool_date2['Income_corr'].sum() if not tool_date2.empty else 0
+            
+            if corr_total1 > 0 or corr_total2 > 0:
+                corr_change = corr_total2 - corr_total1
+                corr_pct_change = (corr_change / corr_total1 * 100) if corr_total1 != 0 else (100 if corr_total2 > 0 else 0)
+                change_desc = "increased" if corr_change > 0 else "decreased" if corr_change < 0 else "remained stable"
+                
+                text_parts.append(f"Total Income Correction was {format_number(corr_total1)} in {date1.strftime('%Y-%m')} and {change_desc} to {format_number(corr_total2)} in {date2.strftime('%Y-%m')}")
+                if abs(corr_pct_change) > 0.01:
+                    text_parts.append(f", representing a {abs(corr_pct_change):.1f}% change.\n\n")
+                else:
+                    text_parts.append(".\n\n")
+                
+                # Breakdown by Function
+                if 'Function' in tool_date1.columns or 'Function' in tool_date2.columns:
+                    text_parts.append("Income Correction by Function:\n")
+                    
+                    func1 = tool_date1.groupby('Function')['Income_corr'].sum() if not tool_date1.empty and 'Function' in tool_date1.columns else pd.Series(dtype=float)
+                    func2 = tool_date2.groupby('Function')['Income_corr'].sum() if not tool_date2.empty and 'Function' in tool_date2.columns else pd.Series(dtype=float)
+                    
+                    all_functions = sorted(set(func1.index) | set(func2.index))
+                    for function in all_functions:
+                        f1, f2 = func1.get(function, 0), func2.get(function, 0)
+                        f_change = f2 - f1
+                        f_pct_change = (f_change / f1 * 100) if f1 != 0 else (100 if f2 > 0 else 0)
+                        f_change_desc = "increased" if f_change > 0 else "decreased" if f_change < 0 else "remained stable"
+                        
+                        text_parts.append(f"• {function}: {format_number(f1)} → {format_number(f2)} ({f_change_desc}")
+                        if abs(f_pct_change) > 0.01:
+                            text_parts.append(f" by {abs(f_pct_change):.1f}%)\n")
+                        else:
+                            text_parts.append(")\n")
+                    text_parts.append("\n")
+    except Exception as e:
+        # Silently skip if tool_sample data not available
+        pass
+    
     text_parts.extend(["SUMMARY:\n", "=" * 30 + "\n", "• [Add your key insights here]\n", "• [Note any significant patterns]\n", "• [Record actionable findings]"])
     return "".join(text_parts)
 
 def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, selected_type, var_label):
     """Create a dumbbell chart showing proportion changes"""
     if group_var == "none":
-        group_var = "Item"
+        group_var = "Function"
     
     if group_var not in ['Division', 'Type', 'Item', 'Function']:
         fig = go.Figure()
@@ -288,7 +312,7 @@ def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, s
 # APP LAYOUT
 # ============================================================================
 app.layout = dmc.MantineProvider(
-    theme={"colorScheme": "light", "primaryColor": "blue"},
+    theme={"colorScheme": "light", "primaryColor": "gray"},
     children=[dmc.AppShell(
         id="app-shell", header={"height": 60}, navbar={"width": 250, "breakpoint": "sm"}, padding="md",
         children=[
@@ -327,9 +351,16 @@ app.layout = dmc.MantineProvider(
                                                 ], gap="xs", align="flex-start"),
                                                 dmc.Stack([
                                                     dmc.Text("Year Range:", size="sm", fw=500, mb=5),
-                                                    html.Div([dcc.RangeSlider(id="year-range-slider", min=min_year, max=max_year, step=1,
-                                                        value=[min_year, max_year], marks=year_marks, tooltip={"placement": "bottom", "always_visible": True})],
-                                                        style={"width": "100%", "padding": "10px 20px"})
+                                                    dmc.RangeSlider(
+                                                        id="year-range-slider",
+                                                        min=min_year,
+                                                        max=max_year,
+                                                        step=1,
+                                                        value=[min_year, max_year],
+                                                        marks=[{"value": year, "label": str(year)} for year in range(min_year, max_year + 1)],
+                                                        mb="md",
+                                                        size="sm"
+                                                    )
                                                 ], gap="xs", style={"flex": 1}),
                                             ], justify="space-between", align="flex-start", mb="lg"),
                                             dmc.Grid([
@@ -358,6 +389,10 @@ app.layout = dmc.MantineProvider(
                                             inheritPadding=True, pt="xs"),
                                         dmc.CardSection([dmc.Title("Return Ratio (Income/Amount)", order=5, mb="sm"), dcc.Graph(id="ratio-chart", style={"height": "250px"})],
                                             inheritPadding=True, pt="xs"),
+                                        dmc.CardSection([
+                                            dmc.Button("Export All Charts Data (ZIP)", id="history-export-btn", variant="outline", size="sm", fullWidth=True),
+                                            dcc.Download(id="download-history-data"),
+                                        ], inheritPadding=True, pt="xs"),
                                     ], withBorder=True, shadow="sm", radius="md", mb="md")
                                 ]),
                                 dmc.GridCol(span=4, children=[
@@ -447,9 +482,16 @@ app.layout = dmc.MantineProvider(
                                         dmc.Title("Tool Controls", order=4, mb="md"),
                                         dmc.Stack([
                                             dmc.Text("Year Range:", size="sm", fw=500, mb=5),
-                                            html.Div([dcc.RangeSlider(id="tool-year-range-slider", min=min_year, max=max_year, step=1,
-                                                value=[min_year, max_year], marks=year_marks, tooltip={"placement": "bottom", "always_visible": True})],
-                                                style={"width": "100%", "padding": "10px 20px"})
+                                            dmc.RangeSlider(
+                                                id="tool-year-range-slider",
+                                                min=min_year,
+                                                max=max_year,
+                                                step=1,
+                                                value=[min_year, max_year],
+                                                marks=[{"value": year, "label": str(year)} for year in range(min_year, max_year + 1)],
+                                                mb="md",
+                                                size="sm"
+                                            )
                                         ], gap="xs", mb="lg"),
                                         dmc.Grid([
                                             dmc.GridCol(span=4, children=[
@@ -478,6 +520,10 @@ app.layout = dmc.MantineProvider(
                                     dmc.CardSection([
                                         dmc.Title("Income Analysis: Original vs Corrected", order=4, mb="md"),
                                         dcc.Graph(id="tool-income-chart", style={"height": "500px"})
+                                    ], inheritPadding=True, pt="xs"),
+                                    dmc.CardSection([
+                                        dmc.Button("Export Tool Data (ZIP)", id="tool-export-btn", variant="outline", size="sm", fullWidth=True),
+                                        dcc.Download(id="download-tool-data"),
                                     ], inheritPadding=True, pt="xs"),
                                 ], withBorder=True, shadow="sm", radius="md")
                             ], gap="md")
@@ -549,10 +595,12 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
             stacked_data = df.groupby(['month', stack_var])[variable_col].sum().unstack(fill_value=0)
             colors = get_color_sequence('stacked', len(stacked_data.columns))
             for i, category in enumerate(stacked_data.columns):
+                hover_text = [format_hover_value(v) for v in stacked_data[category]]
                 fig.add_trace(go.Bar(x=stacked_data.index, y=stacked_data[category], name=f"{category}",
                     marker_color=colors[i],
                     text=[format_number(v) for v in stacked_data[category]], textposition='auto',
-                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{y:,.0f}<extra></extra>'))
+                    customdata=hover_text,
+                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{customdata}<extra></extra>'))
             fig.update_layout(barmode='stack')
         elif group_var != "none" and group_var in df.columns and group_var in ['Division', 'Type', 'Item', 'Function']:
             categories = sorted(df[group_var].unique())
@@ -560,17 +608,21 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
             for i, category in enumerate(categories):
                 category_data = df[df[group_var] == category]
                 monthly_data = category_data.groupby('month')[variable_col].sum().reset_index()
+                hover_text = [format_hover_value(v) for v in monthly_data[variable_col]]
                 fig.add_trace(go.Bar(x=monthly_data['month'], y=monthly_data[variable_col], name=f"{category}",
                     marker_color=colors[i],
                     text=[format_number(v) for v in monthly_data[variable_col]], textposition='auto',
-                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{y:,.0f}<extra></extra>'))
+                    customdata=hover_text,
+                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{customdata}<extra></extra>'))
             fig.update_layout(barmode='group')
         else:
             monthly_data = df.groupby('month')[variable_col].sum().reset_index()
+            hover_text = [format_hover_value(v) for v in monthly_data[variable_col]]
             fig.add_trace(go.Bar(x=monthly_data['month'], y=monthly_data[variable_col], name=title,
-                marker_color=CHART_COLORS['gray_dark'],
+                marker_color=get_color_sequence('bar', 1)[0],
                 text=[format_number(v) for v in monthly_data[variable_col]], textposition='auto',
-                hovertemplate='<b>%{x}</b><br>Value: %{y:,.0f}<extra></extra>'))
+                customdata=hover_text,
+                hovertemplate='<b>%{x}</b><br>Value: %{customdata}<extra></extra>'))
         
         all_values = []
         for trace in fig.data:
@@ -608,11 +660,11 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
         monthly_data = df.groupby('month').agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
         monthly_data['ratio'] = (monthly_data[income_col] / monthly_data[amount_col].replace(0, np.nan)) * 100
         ratio_fig.add_trace(go.Scatter(x=monthly_data['month'], y=monthly_data['ratio'],
-            mode='lines+markers', name='Return Ratio', line=dict(color=CHART_COLORS['gray_dark'], width=3), marker=dict(size=8)))
+            mode='lines+markers', name='Return Ratio', line=dict(color=get_color_sequence('line', 1)[0], width=3), marker=dict(size=8)))
     
     ratio_fig.update_layout(title=f"Return Ratio (Income/Amount) - {selected_type}", xaxis_title="Month", yaxis_title="Ratio (%)",
-        template="plotly_white", height=250, margin=dict(l=50, r=50, t=60, b=50), showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.4, xanchor="center", x=0.5))
+        template="plotly_white", height=250, margin=dict(l=50, r=50, t=60, b=80), showlegend=True,
+        legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5))
     ratio_fig.update_xaxes(tickangle=45)
     ratio_fig.update_yaxes(ticksuffix="%")
     
@@ -720,10 +772,12 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
             for i, category in enumerate(sorted_categories):
                 val1 = df1[df1[group_var] == category][variable].sum() if not df1.empty and category in df1[group_var].values else 0
                 val2 = df2[df2[group_var] == category][variable].sum() if not df2.empty and category in df2[group_var].values else 0
+                hover_text = [format_hover_value(val1), format_hover_value(val2)]
                 fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=f"{category}",
                     marker_color=colors[i],
                     text=[format_number(val1), format_number(val2)], textposition='auto',
-                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{y:,.0f}<extra></extra>'))
+                    customdata=hover_text,
+                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{customdata}<extra></extra>'))
             fig.update_layout(barmode='group')
         elif stack_var != "none" and stack_var in df.columns and stack_var in ['Division', 'Type', 'Item', 'Function']:
             all_categories = set()
@@ -734,18 +788,22 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
             for i, category in enumerate(sorted_categories):
                 val1 = df1[df1[stack_var] == category][variable].sum() if not df1.empty and category in df1[stack_var].values else 0
                 val2 = df2[df2[stack_var] == category][variable].sum() if not df2.empty and category in df2[stack_var].values else 0
+                hover_text = [format_hover_value(val1), format_hover_value(val2)]
                 fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=f"{category}",
                     marker_color=colors[i],
                     text=[format_number(val1), format_number(val2)], textposition='auto',
-                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{y:,.0f}<extra></extra>'))
+                    customdata=hover_text,
+                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{customdata}<extra></extra>'))
             fig.update_layout(barmode='stack')
         else:
             val1 = df1[variable].sum() if not df1.empty else 0
             val2 = df2[variable].sum() if not df2.empty else 0
             comparison_colors = get_color_sequence('bar', 2, is_comparison=True)
+            hover_text = [format_hover_value(val1), format_hover_value(val2)]
             fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=var_label,
                 marker_color=comparison_colors, text=[format_number(val1), format_number(val2)], textposition='auto',
-                hovertemplate='<b>%{x}</b><br>Value: %{y:,.0f}<extra></extra>'))
+                customdata=hover_text,
+                hovertemplate='<b>%{x}</b><br>Value: %{customdata}<extra></extra>'))
         
         all_values = [v for trace in fig.data for v in trace.y if v is not None]
         max_val = max(all_values) if all_values else 0
@@ -810,29 +868,180 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
 
 @callback(Output("download-dataframe-csv", "data"), Input("export-csv-btn", "n_clicks"),
     [State("comparison-type-selector", "value"), State("comparison-date-selector", "value"),
-     State("comparison-filter-selector", "value"), State("comparison-filter-values-selector", "value")], prevent_initial_call=True)
-def export_csv(n_clicks, selected_type, selected_dates, filter_var, filter_values):
+     State("comparison-filter-selector", "value"), State("comparison-filter-values-selector", "value"),
+     State("comparison-group-selector", "value"), State("comparison-stack-selector", "value")], prevent_initial_call=True)
+def export_comparison_excel(n_clicks, selected_type, selected_dates, filter_var, filter_values, group_var, stack_var):
+    """Export all comparison chart data to multi-sheet Excel"""
     if n_clicks and selected_dates and len(selected_dates) == 2:
+        import io
         date1, date2 = sorted([pd.to_datetime(date + '-01') for date in selected_dates])
         df = sample_data.copy()
-        df_filtered = df[(df['date'].dt.to_period('M') == date1.to_period('M')) | 
-                        (df['date'].dt.to_period('M') == date2.to_period('M'))]
+        
+        # Filter by dates
+        df_date1 = df[df['date'].dt.to_period('M') == date1.to_period('M')].copy()
+        df_date2 = df[df['date'].dt.to_period('M') == date2.to_period('M')].copy()
+        
+        # Apply filters
         if filter_var != "none" and filter_var in df.columns and filter_values:
-            df_filtered = df_filtered[df_filtered[filter_var].isin(filter_values)]
-        return dcc.send_data_frame(df_filtered.to_csv, f"comparison_data_{selected_type}_{datetime.now().strftime('%Y%m%d')}.csv", index=False)
+            df_date1 = df_date1[df_date1[filter_var].isin(filter_values)]
+            df_date2 = df_date2[df_date2[filter_var].isin(filter_values)]
+        
+        # Create Excel file with multiple sheets
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # Sheet 1: Raw filtered data
+            df_combined = pd.concat([df_date1, df_date2])
+            df_combined.to_excel(writer, sheet_name='Raw Data', index=False)
+            
+            # Sheet 2: Amount & Income totals
+            amount_col = f'Amount_{selected_type}' if selected_type != 'Total' else 'Amount_total'
+            income_col = f'Income_{selected_type}' if selected_type != 'Total' else 'Income_total'
+            
+            summary_data = pd.DataFrame({
+                'Date': [date1.strftime('%Y-%m'), date2.strftime('%Y-%m')],
+                'Amount': [df_date1[amount_col].sum(), df_date2[amount_col].sum()],
+                'Income': [df_date1[income_col].sum(), df_date2[income_col].sum()]
+            })
+            summary_data.to_excel(writer, sheet_name='Summary', index=False)
+            
+            # Sheet 3: Division breakdown if available
+            if 'Division' in df.columns:
+                div_data = []
+                for date, df_temp in [(date1, df_date1), (date2, df_date2)]:
+                    for div in df_temp['Division'].unique():
+                        div_df = df_temp[df_temp['Division'] == div]
+                        div_data.append({
+                            'Date': date.strftime('%Y-%m'),
+                            'Division': div,
+                            'Amount': div_df[amount_col].sum(),
+                            'Income': div_df[income_col].sum()
+                        })
+                pd.DataFrame(div_data).to_excel(writer, sheet_name='By Division', index=False)
+            
+            # Sheet 4: Tool sample data if available
+            try:
+                tool_date1 = tool_sample[tool_sample['date'] == date1].copy()
+                tool_date2 = tool_sample[tool_sample['date'] == date2].copy()
+                if filter_var != "none" and filter_values and filter_var in tool_date1.columns:
+                    tool_date1 = tool_date1[tool_date1[filter_var].isin(filter_values)]
+                    tool_date2 = tool_date2[tool_date2[filter_var].isin(filter_values)]
+                tool_combined = pd.concat([tool_date1, tool_date2])
+                if not tool_combined.empty:
+                    tool_combined.to_excel(writer, sheet_name='Income Corrections', index=False)
+            except:
+                pass
+        
+        output.seek(0)
+        return dcc.send_bytes(output.getvalue(), f"comparison_data_{selected_type}_{datetime.now().strftime('%Y%m%d')}.xlsx")
 
 @callback(Output("download-dataframe-xlsx", "data"), Input("export-excel-btn", "n_clicks"),
     [State("comparison-type-selector", "value"), State("comparison-date-selector", "value"),
-     State("comparison-filter-selector", "value"), State("comparison-filter-values-selector", "value")], prevent_initial_call=True)
-def export_excel(n_clicks, selected_type, selected_dates, filter_var, filter_values):
-    if n_clicks and selected_dates and len(selected_dates) == 2:
-        date1, date2 = sorted([pd.to_datetime(date + '-01') for date in selected_dates])
+     State("comparison-filter-selector", "value"), State("comparison-filter-values-selector", "value"),
+     State("comparison-group-selector", "value"), State("comparison-stack-selector", "value")], prevent_initial_call=True)
+def export_comparison_excel_alt(n_clicks, selected_type, selected_dates, filter_var, filter_values, group_var, stack_var):
+    """Export all comparison chart data to multi-sheet Excel (duplicate of CSV for compatibility)"""
+    return export_comparison_excel(n_clicks, selected_type, selected_dates, filter_var, filter_values, group_var, stack_var)
+
+@callback(Output("download-history-data", "data"), Input("history-export-btn", "n_clicks"),
+    [State("variable-selector", "value"), State("year-range-slider", "value"),
+     State("filter-selector", "value"), State("filter-values-selector", "value"),
+     State("stack-selector", "value"), State("group-selector", "value")], prevent_initial_call=True)
+def export_history_data(n_clicks, selected_type, year_range, filter_var, filter_values, stack_var, group_var):
+    """Export all History tab chart data to multi-sheet Excel"""
+    if n_clicks:
+        import io
         df = sample_data.copy()
-        df_filtered = df[(df['date'].dt.to_period('M') == date1.to_period('M')) | 
-                        (df['date'].dt.to_period('M') == date2.to_period('M'))]
+        
+        # Apply filters
+        df = df[(df['date'].dt.year >= year_range[0]) & (df['date'].dt.year <= year_range[1])]
         if filter_var != "none" and filter_var in df.columns and filter_values:
-            df_filtered = df_filtered[df_filtered[filter_var].isin(filter_values)]
-        return dcc.send_data_frame(df_filtered.to_excel, f"comparison_data_{selected_type}_{datetime.now().strftime('%Y%m%d')}.xlsx", index=False)
+            df = df[df[filter_var].isin(filter_values)]
+        
+        amount_col = f'Amount_{selected_type}' if selected_type != 'Total' else 'Amount_total'
+        income_col = f'Income_{selected_type}' if selected_type != 'Total' else 'Income_total'
+        
+        # Create Excel with multiple sheets
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # Sheet 1: Amount chart data
+            amount_data = df.groupby(df['date'].dt.to_period('M'))[amount_col].sum().reset_index()
+            amount_data.columns = ['Month', 'Amount']
+            amount_data['Month'] = amount_data['Month'].astype(str)
+            amount_data.to_excel(writer, sheet_name='Amount Chart', index=False)
+            
+            # Sheet 2: Income chart data
+            income_data = df.groupby(df['date'].dt.to_period('M'))[income_col].sum().reset_index()
+            income_data.columns = ['Month', 'Income']
+            income_data['Month'] = income_data['Month'].astype(str)
+            income_data.to_excel(writer, sheet_name='Income Chart', index=False)
+            
+            # Sheet 3: Ratio chart data
+            ratio_data = df.groupby(df['date'].dt.to_period('M')).agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
+            ratio_data['Ratio'] = (ratio_data[income_col] / ratio_data[amount_col].replace(0, np.nan)) * 100
+            ratio_data.columns = ['Month', 'Amount', 'Income', 'Ratio (%)']
+            ratio_data['Month'] = ratio_data['Month'].astype(str)
+            ratio_data.to_excel(writer, sheet_name='Ratio Chart', index=False)
+            
+            # Sheet 4: Raw filtered data
+            df.to_excel(writer, sheet_name='Raw Data', index=False)
+        
+        output.seek(0)
+        return dcc.send_bytes(output.getvalue(), f"history_data_{selected_type}_{datetime.now().strftime('%Y%m%d')}.xlsx")
+
+@callback(Output("download-tool-data", "data"), Input("tool-export-btn", "n_clicks"),
+    [State("tool-division-filter", "value"), State("tool-item-filter", "value"),
+     State("tool-function-filter", "value"), State("tool-year-range-slider", "value")], prevent_initial_call=True)
+def export_tool_data(n_clicks, division_filter, item_filter, function_filter, year_range):
+    """Export Tool tab data to multi-sheet Excel"""
+    if n_clicks:
+        import io
+        
+        # Filter main data
+        df_main = sample_data.copy()
+        df_main = df_main[(df_main['date'].dt.year >= year_range[0]) & (df_main['date'].dt.year <= year_range[1])]
+        if division_filter != "none":
+            df_main = df_main[df_main['Division'] == division_filter]
+        if item_filter != "none":
+            df_main = df_main[df_main['Item'] == item_filter]
+        if function_filter != "none":
+            df_main = df_main[df_main['Function'] == function_filter]
+        
+        # Filter tool data
+        df_corr = tool_sample.copy()
+        df_corr = df_corr[(df_corr['date'].dt.year >= year_range[0]) & (df_corr['date'].dt.year <= year_range[1])]
+        if division_filter != "none":
+            df_corr = df_corr[df_corr['Division'] == division_filter]
+        if item_filter != "none":
+            df_corr = df_corr[df_corr['Item'] == item_filter]
+        if function_filter != "none":
+            df_corr = df_corr[df_corr['Function'] == function_filter]
+        
+        # Create Excel with multiple sheets
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # Sheet 1: Original Income
+            main_agg = df_main.groupby('date')['Income_total'].sum().reset_index()
+            main_agg['month'] = main_agg['date'].dt.to_period('M').astype(str)
+            main_agg[['month', 'Income_total']].to_excel(writer, sheet_name='Original Income', index=False)
+            
+            # Sheet 2: Income Corrections
+            corr_agg = df_corr.groupby('date')['Income_corr'].sum().reset_index()
+            corr_agg['month'] = corr_agg['date'].dt.to_period('M').astype(str)
+            corr_agg[['month', 'Income_corr']].to_excel(writer, sheet_name='Income Corrections', index=False)
+            
+            # Sheet 3: Combined view
+            merged = pd.merge(main_agg[['month', 'Income_total']], corr_agg[['month', 'Income_corr']], 
+                             on='month', how='outer').fillna(0)
+            merged['Total_with_Correction'] = merged['Income_total'] + merged['Income_corr']
+            merged.to_excel(writer, sheet_name='Combined', index=False)
+            
+            # Sheet 4 & 5: Raw data
+            df_main.to_excel(writer, sheet_name='Raw Original Data', index=False)
+            df_corr.to_excel(writer, sheet_name='Raw Correction Data', index=False)
+        
+        output.seek(0)
+        return dcc.send_bytes(output.getvalue(), f"tool_data_{datetime.now().strftime('%Y%m%d')}.xlsx")
+
 
 @callback(Output("save-analysis-btn", "children"), Input("save-analysis-btn", "n_clicks"), 
     State("analysis-textbox", "value"), prevent_initial_call=True)
@@ -889,20 +1098,22 @@ def update_tool_chart(division_filter, item_filter, function_filter, year_range)
         x=merged['month'],
         y=merged['Income_total'],
         name='Income Total (Original)',
-        marker_color=CHART_COLORS['gray_medium'],
+        marker_color='#718096',  # Gray medium for baseline
         text=[format_number(v) for v in merged['Income_total']],
         textposition='inside',
-        hovertemplate='<b>%{x}</b><br>Income Total (Original)<br>Value: %{y:,.0f}<extra></extra>'
+        customdata=[format_hover_value(v) for v in merged['Income_total']],
+        hovertemplate='<b>%{x}</b><br>Income Total (Original)<br>Value: %{customdata}<extra></extra>'
     ))
     
     fig.add_trace(go.Bar(
         x=merged['month'],
         y=merged['Income_corr'],
         name='Income Correction',
-        marker_color=CHART_COLORS['red_primary'],
+        marker_color='#E53E3E',  # Red for emphasis
         text=[format_number(v) for v in merged['Income_corr']],
         textposition='inside',
-        hovertemplate='<b>%{x}</b><br>Income Correction<br>Value: %{y:,.0f}<extra></extra>'
+        customdata=[format_hover_value(v) for v in merged['Income_corr']],
+        hovertemplate='<b>%{x}</b><br>Income Correction<br>Value: %{customdata}<extra></extra>'
     ))
     
     # Format y-axis
