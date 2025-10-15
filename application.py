@@ -9,6 +9,91 @@ import numpy as np
 from datetime import datetime
 
 # ============================================================================
+# COLOR CONFIGURATION
+# ============================================================================
+CHART_COLORS = {
+    # Professional Gray Palette (Primary)
+    'gray_darkest': '#2D3748',      # For primary emphasis
+    'gray_dark': '#4A5568',          # Main series color
+    'gray_medium': '#718096',        # Secondary series
+    'gray_light': '#A0AEC0',         # Tertiary series
+    'gray_lightest': '#CBD5E0',      # Background/subtle
+    'gray_very_light': '#E2E8F0',    # Very subtle
+    
+    # Red Accent Palette
+    'red_primary': '#E53E3E',        # Main accent/comparison new value
+    'red_medium': '#FC8181',         # Soft emphasis
+    'red_light': '#FEB2B2',          # Light accent
+    'red_pale': '#FBB6CE',           # Pastel pink
+    
+    # Pastel/Pale Accent Colors
+    'pastel_purple': '#B794F4',      # Purple accent
+    'pastel_blue': '#90CDF4',        # Blue accent
+    'pastel_green': '#9AE6B4',       # Green accent
+    'pastel_yellow': '#FAF089',      # Yellow accent
+    'pastel_orange': '#FBD38D',      # Orange accent
+    
+    # Pre-configured Color Sequences
+    'comparison_colors': ['#718096', '#E53E3E'],  # Gray (baseline), Red (new)
+    
+    'gray_sequence_5': [
+        '#2D3748',  # Darkest
+        '#4A5568',  # Dark
+        '#718096',  # Medium
+        '#A0AEC0',  # Light
+        '#CBD5E0',  # Lightest
+    ],
+    
+    'mixed_professional': [
+        '#4A5568',  # Gray dark (primary)
+        '#718096',  # Gray medium
+        '#A0AEC0',  # Gray light
+        '#E53E3E',  # Red accent
+        '#FBB6CE',  # Pale pink
+        '#B794F4',  # Pale purple
+        '#90CDF4',  # Pale blue
+    ],
+    
+    'stacked_balanced': [
+        '#4A5568',  # Gray primary
+        '#718096',  # Gray secondary
+        '#E53E3E',  # Red accent
+        '#A0AEC0',  # Gray light
+        '#FBB6CE',  # Pale pink
+    ],
+}
+
+def get_color_sequence(chart_type, n_colors=1, is_comparison=False):
+    """
+    Returns appropriate color sequence based on chart type and context.
+    
+    Args:
+        chart_type: str - 'bar', 'line', 'stacked', 'grouped'
+        n_colors: int - number of colors needed
+        is_comparison: bool - True for comparison charts (2 dates)
+    
+    Returns:
+        list or str - color code(s)
+    """
+    if is_comparison:
+        return CHART_COLORS['comparison_colors']
+    
+    if chart_type == 'line':
+        # Lines work better with gray gradients
+        return CHART_COLORS['gray_sequence_5'][:n_colors]
+    
+    elif chart_type == 'stacked':
+        # Stacked bars: balanced mix
+        return CHART_COLORS['stacked_balanced'][:n_colors]
+    
+    elif chart_type == 'grouped':
+        # Grouped bars: gray sequence
+        return CHART_COLORS['gray_sequence_5'][:n_colors]
+    
+    else:  # Single bar or default
+        return [CHART_COLORS['gray_dark']]
+
+# ============================================================================
 # INITIALIZATION
 # ============================================================================
 app = dash.Dash(__name__)
@@ -360,6 +445,12 @@ app.layout = dmc.MantineProvider(
                                 dmc.Card([
                                     dmc.CardSection([
                                         dmc.Title("Tool Controls", order=4, mb="md"),
+                                        dmc.Stack([
+                                            dmc.Text("Year Range:", size="sm", fw=500, mb=5),
+                                            html.Div([dcc.RangeSlider(id="tool-year-range-slider", min=min_year, max=max_year, step=1,
+                                                value=[min_year, max_year], marks=year_marks, tooltip={"placement": "bottom", "always_visible": True})],
+                                                style={"width": "100%", "padding": "10px 20px"})
+                                        ], gap="xs", mb="lg"),
                                         dmc.Grid([
                                             dmc.GridCol(span=4, children=[
                                                 dmc.Text("Filter by Division:", size="sm", fw=500, mb=5),
@@ -456,22 +547,30 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
         fig = go.Figure()
         if stack_var != "none" and stack_var in df.columns and stack_var in ['Division', 'Type', 'Item', 'Function']:
             stacked_data = df.groupby(['month', stack_var])[variable_col].sum().unstack(fill_value=0)
-            for category in stacked_data.columns:
+            colors = get_color_sequence('stacked', len(stacked_data.columns))
+            for i, category in enumerate(stacked_data.columns):
                 fig.add_trace(go.Bar(x=stacked_data.index, y=stacked_data[category], name=f"{category}",
-                    text=[format_number(v) for v in stacked_data[category]], textposition='auto'))
+                    marker_color=colors[i],
+                    text=[format_number(v) for v in stacked_data[category]], textposition='auto',
+                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{y:,.0f}<extra></extra>'))
             fig.update_layout(barmode='stack')
         elif group_var != "none" and group_var in df.columns and group_var in ['Division', 'Type', 'Item', 'Function']:
-            for category in sorted(df[group_var].unique()):
+            categories = sorted(df[group_var].unique())
+            colors = get_color_sequence('grouped', len(categories))
+            for i, category in enumerate(categories):
                 category_data = df[df[group_var] == category]
                 monthly_data = category_data.groupby('month')[variable_col].sum().reset_index()
                 fig.add_trace(go.Bar(x=monthly_data['month'], y=monthly_data[variable_col], name=f"{category}",
-                    text=[format_number(v) for v in monthly_data[variable_col]], textposition='auto'))
+                    marker_color=colors[i],
+                    text=[format_number(v) for v in monthly_data[variable_col]], textposition='auto',
+                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{y:,.0f}<extra></extra>'))
             fig.update_layout(barmode='group')
         else:
             monthly_data = df.groupby('month')[variable_col].sum().reset_index()
             fig.add_trace(go.Bar(x=monthly_data['month'], y=monthly_data[variable_col], name=title,
-                marker_color='#1f77b4' if 'Amount' in title else '#ff7f0e',
-                text=[format_number(v) for v in monthly_data[variable_col]], textposition='auto'))
+                marker_color=CHART_COLORS['gray_dark'],
+                text=[format_number(v) for v in monthly_data[variable_col]], textposition='auto',
+                hovertemplate='<b>%{x}</b><br>Value: %{y:,.0f}<extra></extra>'))
         
         all_values = []
         for trace in fig.data:
@@ -497,17 +596,19 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
     
     ratio_fig = go.Figure()
     if group_var != "none" and group_var in df.columns and group_var in ['Division', 'Type', 'Item', 'Function']:
-        for category in sorted(df[group_var].unique()):
+        categories = sorted(df[group_var].unique())
+        colors = get_color_sequence('line', len(categories))
+        for i, category in enumerate(categories):
             category_data = df[df[group_var] == category]
             monthly_data = category_data.groupby('month').agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
             monthly_data['ratio'] = (monthly_data[income_col] / monthly_data[amount_col].replace(0, np.nan)) * 100
             ratio_fig.add_trace(go.Scatter(x=monthly_data['month'], y=monthly_data['ratio'],
-                mode='lines+markers', name=f"{category}", line=dict(width=2), marker=dict(size=6)))
+                mode='lines+markers', name=f"{category}", line=dict(color=colors[i], width=2), marker=dict(size=6)))
     else:
         monthly_data = df.groupby('month').agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
         monthly_data['ratio'] = (monthly_data[income_col] / monthly_data[amount_col].replace(0, np.nan)) * 100
         ratio_fig.add_trace(go.Scatter(x=monthly_data['month'], y=monthly_data['ratio'],
-            mode='lines+markers', name='Return Ratio', line=dict(color='#2ca02c', width=3), marker=dict(size=8)))
+            mode='lines+markers', name='Return Ratio', line=dict(color=CHART_COLORS['gray_dark'], width=3), marker=dict(size=8)))
     
     ratio_fig.update_layout(title=f"Return Ratio (Income/Amount) - {selected_type}", xaxis_title="Month", yaxis_title="Ratio (%)",
         template="plotly_white", height=250, margin=dict(l=50, r=50, t=60, b=50), showlegend=True,
@@ -614,27 +715,37 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
             all_categories = set()
             if not df1.empty: all_categories.update(df1[group_var].unique())
             if not df2.empty: all_categories.update(df2[group_var].unique())
-            for category in sorted(all_categories):
+            sorted_categories = sorted(all_categories)
+            colors = get_color_sequence('grouped', len(sorted_categories))
+            for i, category in enumerate(sorted_categories):
                 val1 = df1[df1[group_var] == category][variable].sum() if not df1.empty and category in df1[group_var].values else 0
                 val2 = df2[df2[group_var] == category][variable].sum() if not df2.empty and category in df2[group_var].values else 0
                 fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=f"{category}",
-                    text=[format_number(val1), format_number(val2)], textposition='auto'))
+                    marker_color=colors[i],
+                    text=[format_number(val1), format_number(val2)], textposition='auto',
+                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{y:,.0f}<extra></extra>'))
             fig.update_layout(barmode='group')
         elif stack_var != "none" and stack_var in df.columns and stack_var in ['Division', 'Type', 'Item', 'Function']:
             all_categories = set()
             if not df1.empty: all_categories.update(df1[stack_var].unique())
             if not df2.empty: all_categories.update(df2[stack_var].unique())
-            for category in sorted(all_categories):
+            sorted_categories = sorted(all_categories)
+            colors = get_color_sequence('stacked', len(sorted_categories))
+            for i, category in enumerate(sorted_categories):
                 val1 = df1[df1[stack_var] == category][variable].sum() if not df1.empty and category in df1[stack_var].values else 0
                 val2 = df2[df2[stack_var] == category][variable].sum() if not df2.empty and category in df2[stack_var].values else 0
                 fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=f"{category}",
-                    text=[format_number(val1), format_number(val2)], textposition='auto'))
+                    marker_color=colors[i],
+                    text=[format_number(val1), format_number(val2)], textposition='auto',
+                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{y:,.0f}<extra></extra>'))
             fig.update_layout(barmode='stack')
         else:
             val1 = df1[variable].sum() if not df1.empty else 0
             val2 = df2[variable].sum() if not df2.empty else 0
+            comparison_colors = get_color_sequence('bar', 2, is_comparison=True)
             fig.add_trace(go.Bar(x=date_labels, y=[val1, val2], name=var_label,
-                marker_color=['#1f77b4', '#ff7f0e'], text=[format_number(val1), format_number(val2)], textposition='auto'))
+                marker_color=comparison_colors, text=[format_number(val1), format_number(val2)], textposition='auto',
+                hovertemplate='<b>%{x}</b><br>Value: %{y:,.0f}<extra></extra>'))
         
         all_values = [v for trace in fig.data for v in trace.y if v is not None]
         max_val = max(all_values) if all_values else 0
@@ -674,10 +785,14 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
         if not pct1.empty: all_divisions.update(pct1.index)
         if not pct2.empty: all_divisions.update(pct2.index)
         
-        for division in sorted(all_divisions):
+        sorted_divisions = sorted(all_divisions)
+        colors = get_color_sequence('stacked', len(sorted_divisions))
+        for i, division in enumerate(sorted_divisions):
             p1, p2 = pct1.get(division, 0), pct2.get(division, 0)
             fig.add_trace(go.Bar(x=date_labels, y=[p1, p2], name=division,
-                text=[f"{p1:.1f}%", f"{p2:.1f}%"], textposition='inside'))
+                marker_color=colors[i],
+                text=[f"{p1:.1f}%", f"{p2:.1f}%"], textposition='inside',
+                hovertemplate='<b>%{x}</b><br>' + f'{division}<br>' + 'Percentage: %{y:.1f}%<extra></extra>'))
         
         fig.update_layout(title=f"{var_label} Percentage Contribution by Division - {selected_type}",
             xaxis_title="Month", yaxis_title="Percentage (%)", barmode='stack', template="plotly_white",
@@ -731,11 +846,13 @@ def save_comparison(n_clicks, comparison_text):
 
 @callback(
     Output("tool-income-chart", "figure"),
-    [Input("tool-division-filter", "value"), Input("tool-item-filter", "value"), Input("tool-function-filter", "value")]
+    [Input("tool-division-filter", "value"), Input("tool-item-filter", "value"), 
+     Input("tool-function-filter", "value"), Input("tool-year-range-slider", "value")]
 )
-def update_tool_chart(division_filter, item_filter, function_filter):
+def update_tool_chart(division_filter, item_filter, function_filter, year_range):
     # Filter sample_data
     df_main = sample_data.copy()
+    df_main = df_main[(df_main['date'].dt.year >= year_range[0]) & (df_main['date'].dt.year <= year_range[1])]
     if division_filter != "none":
         df_main = df_main[df_main['Division'] == division_filter]
     if item_filter != "none":
@@ -745,6 +862,7 @@ def update_tool_chart(division_filter, item_filter, function_filter):
     
     # Filter tool_sample
     df_corr = tool_sample.copy()
+    df_corr = df_corr[(df_corr['date'].dt.year >= year_range[0]) & (df_corr['date'].dt.year <= year_range[1])]
     if division_filter != "none":
         df_corr = df_corr[df_corr['Division'] == division_filter]
     if item_filter != "none":
@@ -771,18 +889,20 @@ def update_tool_chart(division_filter, item_filter, function_filter):
         x=merged['month'],
         y=merged['Income_total'],
         name='Income Total (Original)',
-        marker_color='#1f77b4',
+        marker_color=CHART_COLORS['gray_medium'],
         text=[format_number(v) for v in merged['Income_total']],
-        textposition='inside'
+        textposition='inside',
+        hovertemplate='<b>%{x}</b><br>Income Total (Original)<br>Value: %{y:,.0f}<extra></extra>'
     ))
     
     fig.add_trace(go.Bar(
         x=merged['month'],
         y=merged['Income_corr'],
         name='Income Correction',
-        marker_color='#ff7f0e',
+        marker_color=CHART_COLORS['red_primary'],
         text=[format_number(v) for v in merged['Income_corr']],
-        textposition='inside'
+        textposition='inside',
+        hovertemplate='<b>%{x}</b><br>Income Correction<br>Value: %{y:,.0f}<extra></extra>'
     ))
     
     # Format y-axis
