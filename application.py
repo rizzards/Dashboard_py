@@ -346,8 +346,9 @@ app.layout = dmc.MantineProvider(
                                                     dmc.Text("Display Variable:", size="sm", fw=500, mb=5),
                                                     dmc.SegmentedControl(id="variable-selector", value="Total", orientation="vertical",
                                                         fullWidth=False, color="blue", size="sm", style={"width": "120px"},
-                                                        data=[{"value": "Total", "label": "Total"}, {"value": "Type1", "label": "Type 1"},
-                                                            {"value": "Type2", "label": "Type 2"}, {"value": "Type3", "label": "Type 3"}]),
+                                                        data=[{"value": "Total", "label": "Total"}, {"value": "Best", "label": "Best"},
+                                                            {"value": "Type1", "label": "Type 1"}, {"value": "Type2", "label": "Type 2"}, 
+                                                            {"value": "Type3", "label": "Type 3"}]),
                                                 ], gap="xs", align="flex-start"),
                                                 dmc.Stack([
                                                     dmc.Text("Year Range:", size="sm", fw=500, mb=5),
@@ -392,8 +393,10 @@ app.layout = dmc.MantineProvider(
                                         dmc.CardSection([dmc.Title("Return Ratio (Income/Amount)", order=5, mb="sm"), dcc.Graph(id="ratio-chart", style={"height": "250px"})],
                                             inheritPadding=True, pt="xs"),
                                         dmc.CardSection([
-                                            dmc.Button("Export History Data - Excel", id="history-export-btn", variant="outline", size="sm", fullWidth=True),
+                                            dmc.Button("Export History Data - Excel", id="history-export-btn", variant="outline", size="sm", fullWidth=True, mb="xs"),
+                                            dmc.Button("Export Charts as PNG", id="history-png-btn", variant="outline", size="sm", fullWidth=True),
                                             dcc.Download(id="download-history-data"),
+                                            dcc.Download(id="download-history-png"),
                                         ], inheritPadding=True, pt="xs"),
                                     ], withBorder=True, shadow="sm", radius="md", mb="md")
                                 ]),
@@ -416,8 +419,8 @@ app.layout = dmc.MantineProvider(
                                         dmc.Title("Comparison Controls", order=4, mb="md"),
                                         dmc.Group([dmc.Stack([dmc.Text("Display Type:", size="sm", fw=500, mb=5),
                                             dmc.SegmentedControl(id="comparison-type-selector", value="Total", orientation="horizontal", fullWidth=False, color="blue", size="sm",
-                                                data=[{"value": "Total", "label": "Total"}, {"value": "Type1", "label": "Type 1"},
-                                                    {"value": "Type2", "label": "Type 2"}, {"value": "Type3", "label": "Type 3"}])],
+                                                data=[{"value": "Total", "label": "Total"}, {"value": "Best", "label": "Best"},
+                                                    {"value": "Type1", "label": "Type 1"}, {"value": "Type2", "label": "Type 2"}, {"value": "Type3", "label": "Type 3"}])],
                                             gap="xs", style={"flex": 1})], justify="flex-start", align="flex-start", mb="lg"),
                                         dmc.Group([dmc.Stack([dmc.Text("Select Dates for Comparison:", size="sm", fw=500, mb=5),
                                             dmc.MultiSelect(id="comparison-date-selector", placeholder="Select exactly 2 dates to compare", data=[], value=[],
@@ -469,8 +472,12 @@ app.layout = dmc.MantineProvider(
                                             dmc.GridCol([dmc.Title("Income by Division", order=6, mb="sm"), dcc.Graph(id="income-division-chart", style={"height": "350px"})], span=6),
                                         ], gutter="md")], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
-                                        dmc.Button("Export Comparison Data - Excel", id="export-excel-btn", variant="outline", size="sm"),
+                                        dmc.Group([
+                                            dmc.Button("Export Comparison Data - Excel", id="export-excel-btn", variant="outline", size="sm"),
+                                            dmc.Button("Export Charts as PNG", id="comparison-png-btn", variant="outline", size="sm"),
+                                        ]),
                                         dcc.Download(id="download-dataframe-xlsx"),
+                                        dcc.Download(id="download-comparison-png"),
                                     ], inheritPadding=True, pt="xs"),
                                 ], withBorder=True, shadow="sm", radius="md")
                             ], gap="md")
@@ -524,8 +531,10 @@ app.layout = dmc.MantineProvider(
                                         dcc.Graph(id="tool-income-chart", style={"height": "500px"})
                                     ], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
-                                        dmc.Button("Export Tool Data - Excel", id="tool-export-btn", variant="outline", size="sm", fullWidth=True),
+                                        dmc.Button("Export Tool Data - Excel", id="tool-export-btn", variant="outline", size="sm", fullWidth=True, mb="xs"),
+                                        dmc.Button("Export Charts as PNG", id="tool-png-btn", variant="outline", size="sm", fullWidth=True),
                                         dcc.Download(id="download-tool-data"),
+                                        dcc.Download(id="download-tool-png"),
                                     ], inheritPadding=True, pt="xs"),
                                 ], withBorder=True, shadow="sm", radius="md")
                             ], gap="md")
@@ -561,6 +570,9 @@ def update_filter_values(filter_var):
 def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_var, year_range):
     if selected_type == "Total":
         amount_col, income_col = "Amount_total", "Income_total"
+    elif selected_type == "Best":
+        # Best = Type1 + Type2
+        amount_col, income_col = "Amount_Best", "Income_Best"
     elif selected_type == "Type1":
         amount_col, income_col = "Amount_1", "Income_1"
     elif selected_type == "Type2":
@@ -569,6 +581,12 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
         amount_col, income_col = "Amount_3", "Income_3"
     
     df = sample_data.copy()
+    
+    # Create Best columns if needed
+    if selected_type == "Best":
+        df['Amount_Best'] = df['Amount_1'] + df['Amount_2']
+        df['Income_Best'] = df['Income_1'] + df['Income_2']
+    
     df = df[(df['date'].dt.year >= year_range[0]) & (df['date'].dt.year <= year_range[1])]
     if filter_var != "none" and filter_var in df.columns and filter_values:
         df = df[df[filter_var].isin(filter_values)]
@@ -598,11 +616,13 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
             colors = get_color_sequence('stacked', len(stacked_data.columns))
             for i, category in enumerate(stacked_data.columns):
                 hover_text = [format_hover_value(v) for v in stacked_data[category]]
+                # Format dates as Month-Year (e.g., "Apr-2023")
+                hover_dates = [pd.to_datetime(str(m)).strftime('%b-%Y') for m in stacked_data.index]
                 fig.add_trace(go.Bar(x=stacked_data.index, y=stacked_data[category], name=f"{category}",
                     marker_color=colors[i],
                     text=[format_number(v) for v in stacked_data[category]], textposition='auto',
-                    customdata=hover_text,
-                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{customdata}<extra></extra>'))
+                    customdata=list(zip(hover_dates, hover_text)),
+                    hovertemplate='<b>%{customdata[0]}</b><br>' + f'{category}<br>' + 'Value: %{customdata[1]}<extra></extra>'))
             fig.update_layout(barmode='stack')
         elif group_var != "none" and group_var in df.columns and group_var in ['Division', 'Type', 'Item', 'Function']:
             categories = sorted(df[group_var].unique())
@@ -611,20 +631,22 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
                 category_data = df[df[group_var] == category]
                 monthly_data = category_data.groupby('month')[variable_col].sum().reset_index()
                 hover_text = [format_hover_value(v) for v in monthly_data[variable_col]]
+                hover_dates = [pd.to_datetime(str(m)).strftime('%b-%Y') for m in monthly_data['month']]
                 fig.add_trace(go.Bar(x=monthly_data['month'], y=monthly_data[variable_col], name=f"{category}",
                     marker_color=colors[i],
                     text=[format_number(v) for v in monthly_data[variable_col]], textposition='auto',
-                    customdata=hover_text,
-                    hovertemplate='<b>%{x}</b><br>' + f'{category}<br>' + 'Value: %{customdata}<extra></extra>'))
+                    customdata=list(zip(hover_dates, hover_text)),
+                    hovertemplate='<b>%{customdata[0]}</b><br>' + f'{category}<br>' + 'Value: %{customdata[1]}<extra></extra>'))
             fig.update_layout(barmode='group')
         else:
             monthly_data = df.groupby('month')[variable_col].sum().reset_index()
             hover_text = [format_hover_value(v) for v in monthly_data[variable_col]]
+            hover_dates = [pd.to_datetime(str(m)).strftime('%b-%Y') for m in monthly_data['month']]
             fig.add_trace(go.Bar(x=monthly_data['month'], y=monthly_data[variable_col], name=title,
                 marker_color=get_color_sequence('bar', 1)[0],
                 text=[format_number(v) for v in monthly_data[variable_col]], textposition='auto',
-                customdata=hover_text,
-                hovertemplate='<b>%{x}</b><br>Value: %{customdata}<extra></extra>'))
+                customdata=list(zip(hover_dates, hover_text)),
+                hovertemplate='<b>%{customdata[0]}</b><br>Value: %{customdata[1]}<extra></extra>'))
         
         all_values = []
         for trace in fig.data:
@@ -656,17 +678,23 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
             category_data = df[df[group_var] == category]
             monthly_data = category_data.groupby('month').agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
             monthly_data['ratio'] = (monthly_data[income_col] / monthly_data[amount_col].replace(0, np.nan)) * 100
+            hover_dates = [pd.to_datetime(str(m)).strftime('%b-%Y') for m in monthly_data['month']]
             ratio_fig.add_trace(go.Scatter(x=monthly_data['month'], y=monthly_data['ratio'],
-                mode='lines+markers', name=f"{category}", line=dict(color=colors[i], width=2), marker=dict(size=6)))
+                mode='lines+markers', name=f"{category}", line=dict(color=colors[i], width=2), marker=dict(size=6),
+                customdata=list(zip(hover_dates, monthly_data['ratio'])),
+                hovertemplate='<b>%{customdata[0]}</b><br>' + f'{category}<br>' + 'Ratio: %{customdata[1]:.2f}%<extra></extra>'))
     else:
         monthly_data = df.groupby('month').agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
         monthly_data['ratio'] = (monthly_data[income_col] / monthly_data[amount_col].replace(0, np.nan)) * 100
+        hover_dates = [pd.to_datetime(str(m)).strftime('%b-%Y') for m in monthly_data['month']]
         ratio_fig.add_trace(go.Scatter(x=monthly_data['month'], y=monthly_data['ratio'],
-            mode='lines+markers', name='Return Ratio', line=dict(color=get_color_sequence('line', 1)[0], width=3), marker=dict(size=8)))
+            mode='lines+markers', name='Return Ratio', line=dict(color=get_color_sequence('line', 1)[0], width=3), marker=dict(size=8),
+            customdata=list(zip(hover_dates, monthly_data['ratio'])),
+            hovertemplate='<b>%{customdata[0]}</b><br>Ratio: %{customdata[1]:.2f}%<extra></extra>'))
     
     ratio_fig.update_layout(title=f"Return Ratio (Income/Amount) - {selected_type}", xaxis_title="Month", yaxis_title="Ratio (%)",
-        template="plotly_white", height=250, margin=dict(l=50, r=50, t=60, b=100), showlegend=True,
-        legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5))
+        template="plotly_white", height=250, margin=dict(l=50, r=120, t=60, b=50), showlegend=True,
+        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02))
     ratio_fig.update_xaxes(tickangle=45)
     ratio_fig.update_yaxes(ticksuffix="%")
     
@@ -705,6 +733,8 @@ def update_comparison_filter_values(filter_var):
 def update_enhanced_comparison_content(selected_type, selected_dates, filter_var, filter_values, stack_var, group_var):
     if selected_type == "Total":
         amount_col, income_col = "Amount_total", "Income_total"
+    elif selected_type == "Best":
+        amount_col, income_col = "Amount_Best", "Income_Best"
     elif selected_type == "Type1":
         amount_col, income_col = "Amount_1", "Income_1"
     elif selected_type == "Type2":
@@ -724,6 +754,12 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
     
     date1, date2 = sorted([pd.to_datetime(date + '-01') for date in selected_dates])
     df = sample_data.copy()
+    
+    # Create Best columns if needed
+    if selected_type == "Best":
+        df['Amount_Best'] = df['Amount_1'] + df['Amount_2']
+        df['Income_Best'] = df['Income_1'] + df['Income_2']
+    
     df_date1 = df[df['date'].dt.to_period('M') == date1.to_period('M')]
     df_date2 = df[df['date'].dt.to_period('M') == date2.to_period('M')]
     
@@ -764,7 +800,7 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
     ], cols=3, spacing="sm", mb="lg")
     
     def create_comparison_chart(df1, df2, variable, var_label):
-        fig, date_labels = go.Figure(), [date1.strftime('%Y-%m'), date2.strftime('%Y-%m')]
+        fig, date_labels = go.Figure(), [date1.strftime('%b-%Y'), date2.strftime('%b-%Y')]
         if group_var != "none" and group_var in df.columns and group_var in ['Division', 'Type', 'Item', 'Function']:
             all_categories = set()
             if not df1.empty: all_categories.update(df1[group_var].unique())
@@ -977,6 +1013,73 @@ def export_history_data(n_clicks, selected_type, year_range, filter_var, filter_
         output.seek(0)
         return dcc.send_bytes(output.getvalue(), f"history_data_{selected_type}_{datetime.now().strftime('%Y%m%d')}.xlsx")
 
+@callback(Output("download-history-png", "data"), Input("history-png-btn", "n_clicks"),
+    [State("amount-barchart", "figure"), State("income-barchart", "figure"), State("ratio-chart", "figure"),
+     State("variable-selector", "value")], prevent_initial_call=True)
+def export_history_png(n_clicks, amount_fig, income_fig, ratio_fig, selected_type):
+    """Export all History tab charts as PNG files in a ZIP"""
+    if n_clicks:
+        import io
+        import zipfile
+        
+        # Create ZIP file in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Convert each figure to PNG
+            for fig_data, name in [(amount_fig, 'amount_chart'), (income_fig, 'income_chart'), (ratio_fig, 'ratio_chart')]:
+                fig = go.Figure(fig_data)
+                img_bytes = fig.to_image(format="png", width=1200, height=600)
+                zip_file.writestr(f"{name}_{selected_type}.png", img_bytes)
+        
+        zip_buffer.seek(0)
+        return dcc.send_bytes(zip_buffer.getvalue(), f"history_charts_{selected_type}_{datetime.now().strftime('%Y%m%d')}.zip")
+
+@callback(Output("download-comparison-png", "data"), Input("comparison-png-btn", "n_clicks"),
+    [State("comparison-var1-chart", "figure"), State("comparison-var2-chart", "figure"),
+     State("var1-dumbbell-chart", "figure"), State("var2-dumbbell-chart", "figure"),
+     State("amount-division-chart", "figure"), State("income-division-chart", "figure"),
+     State("comparison-type-selector", "value")], prevent_initial_call=True)
+def export_comparison_png(n_clicks, var1_fig, var2_fig, dump1_fig, dump2_fig, amt_div_fig, inc_div_fig, selected_type):
+    """Export all Comparison tab charts as PNG files in a ZIP"""
+    if n_clicks:
+        import io
+        import zipfile
+        
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            charts = [
+                (var1_fig, 'amount_comparison'),
+                (var2_fig, 'income_comparison'),
+                (dump1_fig, 'amount_proportions'),
+                (dump2_fig, 'income_proportions'),
+                (amt_div_fig, 'amount_by_division'),
+                (inc_div_fig, 'income_by_division')
+            ]
+            for fig_data, name in charts:
+                fig = go.Figure(fig_data)
+                img_bytes = fig.to_image(format="png", width=1200, height=600)
+                zip_file.writestr(f"{name}_{selected_type}.png", img_bytes)
+        
+        zip_buffer.seek(0)
+        return dcc.send_bytes(zip_buffer.getvalue(), f"comparison_charts_{selected_type}_{datetime.now().strftime('%Y%m%d')}.zip")
+
+@callback(Output("download-tool-png", "data"), Input("tool-png-btn", "n_clicks"),
+    [State("tool-income-chart", "figure")], prevent_initial_call=True)
+def export_tool_png(n_clicks, tool_fig):
+    """Export Tool tab chart as PNG"""
+    if n_clicks:
+        import io
+        import zipfile
+        
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            fig = go.Figure(tool_fig)
+            img_bytes = fig.to_image(format="png", width=1200, height=700)
+            zip_file.writestr(f"tool_income_chart.png", img_bytes)
+        
+        zip_buffer.seek(0)
+        return dcc.send_bytes(zip_buffer.getvalue(), f"tool_chart_{datetime.now().strftime('%Y%m%d')}.zip")
+
 @callback(Output("download-tool-data", "data"), Input("tool-export-btn", "n_clicks"),
     [State("tool-division-filter", "value"), State("tool-item-filter", "value"),
      State("tool-function-filter", "value"), State("tool-year-range-slider", "value")], prevent_initial_call=True)
@@ -1080,6 +1183,9 @@ def update_tool_chart(division_filter, item_filter, function_filter, year_range)
     # Create stacked bar chart
     fig = go.Figure()
     
+    # Format dates for hover
+    hover_dates = [pd.to_datetime(str(m)).strftime('%b-%Y') for m in merged['month']]
+    
     fig.add_trace(go.Bar(
         x=merged['month'],
         y=merged['Income_total'],
@@ -1087,8 +1193,8 @@ def update_tool_chart(division_filter, item_filter, function_filter, year_range)
         marker_color='#718096',  # Gray medium for baseline
         text=[format_number(v) for v in merged['Income_total']],
         textposition='inside',
-        customdata=[format_hover_value(v) for v in merged['Income_total']],
-        hovertemplate='<b>%{x}</b><br>Income Total (Original)<br>Value: %{customdata}<extra></extra>'
+        customdata=list(zip(hover_dates, [format_hover_value(v) for v in merged['Income_total']])),
+        hovertemplate='<b>%{customdata[0]}</b><br>Income Total (Original)<br>Value: %{customdata[1]}<extra></extra>'
     ))
     
     fig.add_trace(go.Bar(
@@ -1098,8 +1204,8 @@ def update_tool_chart(division_filter, item_filter, function_filter, year_range)
         marker_color='#E53E3E',  # Red for emphasis
         text=[format_number(v) for v in merged['Income_corr']],
         textposition='inside',
-        customdata=[format_hover_value(v) for v in merged['Income_corr']],
-        hovertemplate='<b>%{x}</b><br>Income Correction<br>Value: %{customdata}<extra></extra>'
+        customdata=list(zip(hover_dates, [format_hover_value(v) for v in merged['Income_corr']])),
+        hovertemplate='<b>%{customdata[0]}</b><br>Income Correction<br>Value: %{customdata[1]}<extra></extra>'
     ))
     
     # Format y-axis
