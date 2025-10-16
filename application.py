@@ -73,9 +73,23 @@ try:
     tool_sample = tool_sample.sort_values('date').reset_index(drop=True)
     print(f"Successfully loaded {len(tool_sample)} records from Example_correction.csv")
 
+    scenw_sample = pd.read_csv('Example_scenw.csv')
+    scenw_sample['Date'] = pd.to_datetime(scenw_sample['Date'], format='%Y-%m')
+    scenw_sample = scenw_sample.rename(columns={'Date': 'date'})
+    scenw_sample = scenw_sample.sort_values('date').reset_index(drop=True)
+    print(f"Successfully loaded {len(scenw_sample)} records from Example_scenw.csv")
+
+    type_sample = pd.read_csv('Type_detail.csv')
+    type_sample['Date'] = pd.to_datetime(type_sample['Date'], format='%Y-%m')
+    type_sample = type_sample.rename(columns={'Date': 'date'})
+    type_sample = type_sample.sort_values('date').reset_index(drop=True)
+    print(f"Successfully loaded {len(type_sample)} records from Type_detail.csv")
+
 except FileNotFoundError:
     print("Example_df.csv not found.")
     print("Example_correction.csv not found.")
+    print("Example_scenw.csv not found.")
+    print("Type_detail.csv not found.")
 
 min_year = sample_data['date'].dt.year.min()
 max_year = sample_data['date'].dt.year.max()
