@@ -387,17 +387,10 @@ app.layout = dmc.MantineProvider(
                                     dmc.CardSection([
                                         dmc.Title("Events Summary", order=4, mb="md"),
                                         dmc.Stack([
-                                            dmc.Text("Select dates for events (up to 3):", size="sm", fw=500, mb=5),
-                                            dmc.MultiSelect(
-                                                id="events-date-selector",
-                                                placeholder="Select dates (YYYY-MM format)",
-                                                data=[{"value": date, "label": date} for date in pd.date_range(start=min_date, end=max_date, freq='MS').strftime('%Y-%m').tolist()],
-                                                value=[],
-                                                maxSelectedValues=3,
-                                                size="sm",
-                                                searchable=True,
-                                                mb="md"
-                                            ),
+                                            dmc.Text("Select dates:", size="sm", fw=500, mb=5),                                            
+                                            dmc.MultiSelect(id="events-date-selector", placeholder="Select maximum 3 dates", data=[], value=[],
+                                                maxValues=3, size="sm", searchable=True, clearable=True, leftSection=DashIconify(icon="material-symbols:calendar-month", width=20),
+                                                styles={"dropdown": {"maxHeight": "200px", "overflowY": "auto"}, "input": {"minWidth": "300px"}}),
                                             dmc.Textarea(
                                                 id="events-textbox",
                                                 placeholder="Enter events and notes for selected dates...",
@@ -422,10 +415,12 @@ app.layout = dmc.MantineProvider(
                                     dmc.CardSection([dmc.Title("Return Ratio (Income/Amount)", order=6, mb="sm"), dcc.Graph(id="ratio-chart", style={"height": "250px"})],
                                         inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
-                                        dmc.Button("Export History Data - Excel", id="history-export-btn", variant="filled", size="sm", fullWidth=True, mb="xs",
-                                            leftSection=DashIconify(icon="vscode-icons:file-type-excel", width=20)),
-                                        dmc.Button("Export Charts as PNG", id="history-png-btn", variant="filled", size="sm", fullWidth=True,
-                                            leftSection=DashIconify(icon="mdi:image", width=20)),
+                                        dmc.Group([
+                                            dmc.Button("Export History Data - Excel", id="history-export-btn", variant="filled", size="sm",
+                                                leftSection=DashIconify(icon="vscode-icons:file-type-excel", width=20)),
+                                            dmc.Button("Export Charts as PNG", id="history-png-btn", variant="filled", size="sm", 
+                                                leftSection=DashIconify(icon="mdi:image", width=20)),
+                                        ]),
                                         dcc.Download(id="download-history-data"),
                                         dcc.Download(id="download-history-png"),
                                     ], inheritPadding=True, pt="xs"),
@@ -553,10 +548,12 @@ app.layout = dmc.MantineProvider(
                                         dcc.Graph(id="tool-income-chart", style={"height": "500px"})
                                     ], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
-                                        dmc.Button("Export Tool Data - Excel", id="tool-export-btn", variant="filled", size="sm", fullWidth=True, mb="xs",
-                                            leftSection=DashIconify(icon="vscode-icons:file-type-excel", width=20)),
-                                        dmc.Button("Export Charts as PNG", id="tool-png-btn", variant="filled", size="sm", fullWidth=True,
-                                            leftSection=DashIconify(icon="mdi:image", width=20)),
+                                        dmc.Group([
+                                            dmc.Button("Export Tool Data - Excel", id="tool-export-btn", variant="filled", size="sm",
+                                                leftSection=DashIconify(icon="vscode-icons:file-type-excel", width=20)),
+                                            dmc.Button("Export Charts as PNG", id="tool-png-btn", variant="filled", size="sm",
+                                                leftSection=DashIconify(icon="mdi:image", width=20)),
+                                        ]),
                                         dcc.Download(id="download-tool-data"),
                                         dcc.Download(id="download-tool-png"),
                                     ], inheritPadding=True, pt="xs"),
