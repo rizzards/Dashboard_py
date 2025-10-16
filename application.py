@@ -75,7 +75,7 @@ try:
 
     scenw_sample = pd.read_csv('Example_scenw.csv')
     scenw_sample['Date'] = pd.to_datetime(scenw_sample['Date'], format='%Y-%m')
-    scenw_sample = scenw_sample.rename(columns={'Date': 'date'})
+    scenw_sample = scenw_sample.rename(columns={'Date': 'date', 'Name': 'ScenName'})
     scenw_sample = scenw_sample.sort_values('date').reset_index(drop=True)
     print(f"Successfully loaded {len(scenw_sample)} records from Example_scenw.csv")
 
@@ -119,6 +119,83 @@ def format_hover_value(value):
         return f"{value/1e3:.3f}K"
     else:
         return f"{value:.3f}"
+
+
+def prepare_type_breakdown_data(date1, date2, filter_var, filter_values, group_var):
+    """
+    Prepare combined data with WW, DP, and PP breakdowns for comparison
+    Returns: tuple of (df_date1, df_date2, group_cols) or (None, None, None) if error
+    """
+    try:
+        # Get type_sample data for both dates
+        type_date1 = type_sample[type_sample['date'] == date1].copy()
+        type_date2 = type_sample[type_sample['date'] == date2].copy()
+        
+        # Get sample_data for both dates (for Type2 = Amount_2 and Income_2)
+        sample_date1 = sample_data[sample_data['date'] == date1].copy()
+        sample_date2 = sample_data[sample_data['date'] == date2].copy()
+        
+        # Apply filters if specified
+        if filter_var != "none" and filter_values:
+            if filter_var in type_date1.columns:
+                type_date1 = type_date1[type_date1[filter_var].isin(filter_values)]
+                type_date2 = type_date2[type_date2[filter_var].isin(filter_values)]
+            if filter_var in sample_date1.columns:
+                sample_date1 = sample_date1[sample_date1[filter_var].isin(filter_values)]
+                sample_date2 = sample_date2[sample_date2[filter_var].isin(filter_values)]
+        
+        # Determine grouping columns
+        group_cols = []
+        if group_var != "none" and group_var in ['Division', 'Function', 'Type', 'Item']:
+            group_cols = [group_var]
+        
+        # Process each date
+        def process_date(type_df, sample_df, group_cols):
+            if group_cols:
+                # Aggregate type_sample by group
+                type_agg = type_df.groupby(group_cols).agg({
+                    'WW_Amount': 'sum',
+                    'DP_Amount': 'sum',
+                    'WW_Income': 'sum',
+                    'DP_Income': 'sum'
+                }).reset_index()
+                
+                # Aggregate sample_data by group (Type2 components)
+                sample_agg = sample_df.groupby(group_cols).agg({
+                    'Amount_2': 'sum',
+                    'Income_2': 'sum'
+                }).reset_index()
+                
+                # Merge
+                combined = pd.merge(type_agg, sample_agg, on=group_cols, how='outer').fillna(0)
+            else:
+                # Total aggregation (no grouping)
+                type_totals = {
+                    'WW_Amount': type_df['WW_Amount'].sum(),
+                    'DP_Amount': type_df['DP_Amount'].sum(),
+                    'WW_Income': type_df['WW_Income'].sum(),
+                    'DP_Income': type_df['DP_Income'].sum()
+                }
+                sample_totals = {
+                    'Amount_2': sample_df['Amount_2'].sum(),
+                    'Income_2': sample_df['Income_2'].sum()
+                }
+                combined = pd.DataFrame([{**type_totals, **sample_totals}])
+            
+            # Calculate PP (Private Portfolio) variables
+            combined['PP_Amount'] = combined['Amount_2'] - combined['WW_Amount'] - combined['DP_Amount']
+            combined['PP_Income'] = combined['Income_2'] - combined['WW_Income'] - combined['DP_Income']
+            
+            return combined
+        
+        df1 = process_date(type_date1, sample_date1, group_cols)
+        df2 = process_date(type_date2, sample_date2, group_cols)
+        
+        return df1, df2, group_cols
+        
+    except Exception as e:
+        print(f"Error in prepare_type_breakdown_data: {e}")
+        return None, None, None
 
 
 def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old, income_new, date1, date2, 
@@ -254,6 +331,130 @@ def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old
                     text_parts.append("\n")
     except Exception as e:
         # Silently skip if tool_sample data not available
+        pass
+    
+    # Add Scenario Weight Analysis
+    try:
+        # Filter scenw_sample data for the two comparison dates
+        scenw_date1 = scenw_sample[scenw_sample['date'] == date1].copy()
+        scenw_date2 = scenw_sample[scenw_sample['date'] == date2].copy()
+        
+        if not scenw_date1.empty or not scenw_date2.empty:
+            text_parts.append("SCENARIO WEIGHT ANALYSIS:\n" + "=" * 30 + "\n\n")
+            
+            # Get scenario names and weights for both dates
+            scenarios1 = scenw_date1.set_index('ScenName')['Weight'].to_dict() if not scenw_date1.empty else {}
+            scenarios2 = scenw_date2.set_index('ScenName')['Weight'].to_dict() if not scenw_date2.empty else {}
+            
+            # Get all unique scenario names
+            all_scenarios = sorted(set(scenarios1.keys()) | set(scenarios2.keys()))
+            
+            if all_scenarios:
+                text_parts.append(f"Scenario Weight Changes between {date1.strftime('%Y-%m')} and {date2.strftime('%Y-%m')}:\n")
+                
+                for scenario in all_scenarios:
+                    weight1 = scenarios1.get(scenario, 0)
+                    weight2 = scenarios2.get(scenario, 0)
+                    
+                    # Determine status
+                    if weight1 == 0 and weight2 > 0:
+                        status = "NEW scenario"
+                        text_parts.append(f"• {scenario}: {status} with weight {weight2:.2%}\n")
+                    elif weight1 == weight2:
+                        status = "unchanged"
+                        text_parts.append(f"• {scenario}: {weight1:.2%} → {weight2:.2%} ({status})\n")
+                    elif weight2 > weight1:
+                        status = "increased"
+                        change = weight2 - weight1
+                        text_parts.append(f"• {scenario}: {weight1:.2%} → {weight2:.2%} ({status} by {change:.2%})\n")
+                    else:  # weight2 < weight1
+                        status = "decreased"
+                        change = weight1 - weight2
+                        text_parts.append(f"• {scenario}: {weight1:.2%} → {weight2:.2%} ({status} by {change:.2%})\n")
+                
+                text_parts.append("\n")
+    except Exception as e:
+        # Silently skip if scenw_sample data not available
+        pass
+    
+    # Add Type2 Breakdown Analysis (WW, DP, PP)
+    try:
+        type_df1, type_df2, type_group_cols = prepare_type_breakdown_data(date1, date2, filter_var, filter_values, group_var)
+        
+        if type_df1 is not None and type_df2 is not None:
+            text_parts.append("TYPE 2 BREAKDOWN ANALYSIS (WW / DP / PP):\n" + "=" * 30 + "\n\n")
+            
+            # Amount breakdown
+            if type_group_cols:
+                text_parts.append(f"Amount Breakdown by {group_var}:\n")
+                for idx, row1 in type_df1.iterrows():
+                    group_val = row1[group_var]
+                    row2 = type_df2[type_df2[group_var] == group_val]
+                    
+                    if not row2.empty:
+                        row2 = row2.iloc[0]
+                        text_parts.append(f"\n{group_val}:\n")
+                        for component in ['WW_Amount', 'DP_Amount', 'PP_Amount']:
+                            val1, val2 = row1[component], row2[component]
+                            change = val2 - val1
+                            pct_change = (change / val1 * 100) if val1 != 0 else 0
+                            change_desc = "increased" if change > 0 else "decreased" if change < 0 else "unchanged"
+                            text_parts.append(f"  • {component}: {format_number(val1)} → {format_number(val2)} ({change_desc}")
+                            if abs(pct_change) > 0.01:
+                                text_parts.append(f" by {abs(pct_change):.1f}%)\n")
+                            else:
+                                text_parts.append(")\n")
+            else:
+                text_parts.append("Amount Breakdown Total:\n")
+                row1, row2 = type_df1.iloc[0], type_df2.iloc[0]
+                for component in ['WW_Amount', 'DP_Amount', 'PP_Amount']:
+                    val1, val2 = row1[component], row2[component]
+                    total1 = row1['WW_Amount'] + row1['DP_Amount'] + row1['PP_Amount']
+                    total2 = row2['WW_Amount'] + row2['DP_Amount'] + row2['PP_Amount']
+                    pct1 = (val1 / total1 * 100) if total1 > 0 else 0
+                    pct2 = (val2 / total2 * 100) if total2 > 0 else 0
+                    change = val2 - val1
+                    change_desc = "increased" if change > 0 else "decreased" if change < 0 else "unchanged"
+                    text_parts.append(f"• {component}: {format_number(val1)} ({pct1:.1f}%) → {format_number(val2)} ({pct2:.1f}%) ({change_desc})\n")
+            
+            text_parts.append("\n")
+            
+            # Income breakdown
+            if type_group_cols:
+                text_parts.append(f"Income Breakdown by {group_var}:\n")
+                for idx, row1 in type_df1.iterrows():
+                    group_val = row1[group_var]
+                    row2 = type_df2[type_df2[group_var] == group_val]
+                    
+                    if not row2.empty:
+                        row2 = row2.iloc[0]
+                        text_parts.append(f"\n{group_val}:\n")
+                        for component in ['WW_Income', 'DP_Income', 'PP_Income']:
+                            val1, val2 = row1[component], row2[component]
+                            change = val2 - val1
+                            pct_change = (change / val1 * 100) if val1 != 0 else 0
+                            change_desc = "increased" if change > 0 else "decreased" if change < 0 else "unchanged"
+                            text_parts.append(f"  • {component}: {format_number(val1)} → {format_number(val2)} ({change_desc}")
+                            if abs(pct_change) > 0.01:
+                                text_parts.append(f" by {abs(pct_change):.1f}%)\n")
+                            else:
+                                text_parts.append(")\n")
+            else:
+                text_parts.append("Income Breakdown Total:\n")
+                row1, row2 = type_df1.iloc[0], type_df2.iloc[0]
+                for component in ['WW_Income', 'DP_Income', 'PP_Income']:
+                    val1, val2 = row1[component], row2[component]
+                    total1 = row1['WW_Income'] + row1['DP_Income'] + row1['PP_Income']
+                    total2 = row2['WW_Income'] + row2['DP_Income'] + row2['PP_Income']
+                    pct1 = (val1 / total1 * 100) if total1 > 0 else 0
+                    pct2 = (val2 / total2 * 100) if total2 > 0 else 0
+                    change = val2 - val1
+                    change_desc = "increased" if change > 0 else "decreased" if change < 0 else "unchanged"
+                    text_parts.append(f"• {component}: {format_number(val1)} ({pct1:.1f}%) → {format_number(val2)} ({pct2:.1f}%) ({change_desc})\n")
+            
+            text_parts.append("\n")
+    except Exception as e:
+        # Silently skip if type breakdown data not available
         pass
     
     text_parts.extend(["SUMMARY:\n", "=" * 30 + "\n", "• [Add your key insights here]\n", "• [Note any significant patterns]\n", "• [Record actionable findings]"])
@@ -500,6 +701,11 @@ app.layout = dmc.MantineProvider(
                                             dmc.GridCol([dmc.Title("Amount by Division", order=6, mb="sm"), dcc.Graph(id="amount-division-chart", style={"height": "350px"})], span=6),
                                             dmc.GridCol([dmc.Title("Income by Division", order=6, mb="sm"), dcc.Graph(id="income-division-chart", style={"height": "350px"})], span=6),
                                         ], gutter="md")], inheritPadding=True, pt="xs"),
+                                    dmc.CardSection([dmc.Title("Type 2 Breakdown (WW / DP / PP)", order=6, mb="sm"),
+                                        dmc.Grid([
+                                            dmc.GridCol([dmc.Title("Amount Breakdown", order=6, mb="sm"), dcc.Graph(id="type2-amount-chart", style={"height": "350px"})], span=6),
+                                            dmc.GridCol([dmc.Title("Income Breakdown", order=6, mb="sm"), dcc.Graph(id="type2-income-chart", style={"height": "350px"})], span=6),
+                                        ], gutter="md")], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
                                         dmc.Group([
                                             dmc.Button("Export Comparison Data - Excel", id="export-excel-btn", variant="filled", size="sm",
@@ -577,8 +783,58 @@ app.layout = dmc.MantineProvider(
                     ])
                 ]),
                 html.Div(id="scenario-content", style={"display": "none"}, children=[
-                    dmc.Center([dmc.Stack([dmc.Title("Scenario Page", order=2), dmc.Text("This page is ready for scenario analysis implementation.", c="dimmed")],
-                        align="center")], style={"height": "400px"})
+                    dmc.Tabs(value="scenario_probability", id="scenario-tabs", children=[
+                        dmc.TabsList([
+                            dmc.TabsTab("Scenario Probability", value="scenario_probability"),
+                            dmc.TabsTab("Prediction", value="prediction"),
+                        ]),
+                        dmc.TabsPanel(value="scenario_probability", children=[
+                            dmc.Stack([
+                                dmc.Card([
+                                    dmc.CardSection([
+                                        dmc.Title("Scenario Probability Controls", order=4, mb="md"),
+                                        dmc.Stack([
+                                            dmc.Text("Year Range:", size="sm", fw=500, mb=5),
+                                            dmc.RangeSlider(
+                                                id="scenario-year-range-slider",
+                                                min=min_year,
+                                                max=max_year,
+                                                step=1,
+                                                value=[min_year, max_year],
+                                                marks=[{"value": year, "label": str(year)} for year in range(min_year, max_year + 1)],
+                                                mb="md",
+                                                minRange=1,
+                                                size="md",
+                                                style={"width": "100%"}
+                                            )
+                                        ], gap="xs", mb="lg"),
+                                    ], withBorder=True, inheritPadding=True, py="md"),
+                                ], withBorder=True, shadow="sm", radius="md", mb="md"),
+                                
+                                dmc.Card([
+                                    dmc.CardSection([
+                                        dmc.Title("Scenario Weight Distribution", order=4, mb="md"),
+                                        dcc.Graph(id="scenario-weight-chart", style={"height": "500px"})
+                                    ], inheritPadding=True, pt="xs"),
+                                    dmc.CardSection([
+                                        dmc.Group([
+                                            dmc.Button("Export Scenario Data - Excel", id="scenario-export-btn", variant="filled", size="sm",
+                                                leftSection=DashIconify(icon="vscode-icons:file-type-excel", width=20)),
+                                            dmc.Button("Export Chart as PNG", id="scenario-png-btn", variant="filled", size="sm",
+                                                leftSection=DashIconify(icon="mdi:image", width=20)),
+                                        ]),
+                                        dcc.Download(id="download-scenario-data"),
+                                        dcc.Download(id="download-scenario-png"),
+                                    ], inheritPadding=True, pt="xs"),
+                                ], withBorder=True, shadow="sm", radius="md")
+                            ], gap="md")
+                        ]),
+                        dmc.TabsPanel(value="prediction", children=[
+                            dmc.Center([dmc.Stack([dmc.Title("Prediction Page", order=2), 
+                                dmc.Text("This page is ready for prediction analysis implementation.", c="dimmed")],
+                                align="center")], style={"height": "400px"})
+                        ]),
+                    ])
                 ])
             ])
         ]
@@ -588,6 +844,27 @@ app.layout = dmc.MantineProvider(
 # ============================================================================
 # CALLBACKS
 # ============================================================================
+@callback(
+    [Output("today-content", "style"), Output("scenario-content", "style"),
+     Output("nav-today", "active"), Output("nav-scenario", "active")],
+    [Input("nav-today", "n_clicks"), Input("nav-scenario", "n_clicks")],
+    prevent_initial_call=False
+)
+def toggle_navigation(today_clicks, scenario_clicks):
+    """Toggle between Today and Scenario navigation pages"""
+    ctx = dash.callback_context
+    
+    if not ctx.triggered:
+        # Initial load - show Today
+        return {"display": "block"}, {"display": "none"}, True, False
+    
+    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    
+    if button_id == "nav-scenario":
+        return {"display": "none"}, {"display": "block"}, False, True
+    else:
+        return {"display": "block"}, {"display": "none"}, True, False
+
 @callback([Output("filter-values-selector", "data"), Output("filter-values-selector", "disabled"), Output("filter-values-selector", "value")],
     [Input("filter-selector", "value")])
 def update_filter_values(filter_var):
@@ -760,7 +1037,8 @@ def update_comparison_filter_values(filter_var):
     [Output("comparison-value-boxes", "children"), Output("comparison-var1-chart", "figure"), 
      Output("comparison-var2-chart", "figure"), Output("var1-dumbbell-chart", "figure"), 
      Output("var2-dumbbell-chart", "figure"), Output("amount-division-chart", "figure"),
-     Output("income-division-chart", "figure"), Output("comparison-textbox", "value")],
+     Output("income-division-chart", "figure"), Output("type2-amount-chart", "figure"),
+     Output("type2-income-chart", "figure"), Output("comparison-textbox", "value")],
     [Input("comparison-type-selector", "value"), Input("comparison-date-selector", "value"), 
      Input("comparison-filter-selector", "value"), Input("comparison-filter-values-selector", "value"),
      Input("comparison-stack-selector", "value"), Input("comparison-group-selector", "value")]
@@ -785,7 +1063,7 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
     if not selected_dates or len(selected_dates) != 2:
         empty_boxes = dmc.Center([dmc.Text("Please select exactly 2 dates to see comparison metrics", c="dimmed", size="sm")], style={"padding": "20px"})
         default_text = "Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis"
-        return empty_boxes, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, default_text
+        return empty_boxes, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, default_text
     
     date1, date2 = sorted([pd.to_datetime(date + '-01') for date in selected_dates])
     df = sample_data.copy()
@@ -930,6 +1208,185 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
             height=350, showlegend=True, yaxis=dict(range=[0, 100]))
         return fig
     
+    def create_type2_breakdown_charts(date1, date2, filter_var, filter_values, group_var, selected_type):
+        """Create Type2 breakdown charts showing WW, DP, PP proportions"""
+        type_df1, type_df2, type_group_cols = prepare_type_breakdown_data(date1, date2, filter_var, filter_values, group_var)
+        
+        date_labels = [date1.strftime('%Y-%m'), date2.strftime('%Y-%m')]
+        
+        if type_df1 is None or type_df2 is None:
+            # Return empty figures if data not available
+            empty_fig = go.Figure()
+            empty_fig.add_annotation(text="Type breakdown data not available", xref="paper", yref="paper",
+                x=0.5, y=0.5, xanchor='center', yanchor='middle', showarrow=False)
+            empty_fig.update_layout(template="plotly_white", height=350)
+            return empty_fig, empty_fig
+        
+        # Amount breakdown chart
+        fig_amount = go.Figure()
+        
+        if type_group_cols:
+            # Grouped by category - show side-by-side grouped bars
+            categories = sorted(set(list(type_df1[group_var]) + list(type_df2[group_var])))
+            components = ['WW_Amount', 'DP_Amount', 'PP_Amount']
+            colors_comp = ['#718096', '#E53E3E', '#48BB78']  # Gray, Red, Green
+            
+            for comp_idx, component in enumerate(components):
+                vals_date1 = []
+                vals_date2 = []
+                for cat in categories:
+                    row1 = type_df1[type_df1[group_var] == cat]
+                    row2 = type_df2[type_df2[group_var] == cat]
+                    
+                    total1 = row1[['WW_Amount', 'DP_Amount', 'PP_Amount']].sum().sum() if not row1.empty else 1
+                    total2 = row2[['WW_Amount', 'DP_Amount', 'PP_Amount']].sum().sum() if not row2.empty else 1
+                    
+                    val1 = (row1[component].iloc[0] / total1 * 100) if not row1.empty else 0
+                    val2 = (row2[component].iloc[0] / total2 * 100) if not row2.empty else 0
+                    
+                    vals_date1.append(val1)
+                    vals_date2.append(val2)
+                
+                # Add traces for each date
+                fig_amount.add_trace(go.Bar(
+                    x=[f"{cat} - {date_labels[0]}" for cat in categories],
+                    y=vals_date1,
+                    name=component.replace('_Amount', ''),
+                    marker_color=colors_comp[comp_idx],
+                    text=[f"{v:.1f}%" for v in vals_date1],
+                    textposition='inside',
+                    legendgroup=component,
+                    showlegend=True
+                ))
+                fig_amount.add_trace(go.Bar(
+                    x=[f"{cat} - {date_labels[1]}" for cat in categories],
+                    y=vals_date2,
+                    name=component.replace('_Amount', ''),
+                    marker_color=colors_comp[comp_idx],
+                    text=[f"{v:.1f}%" for v in vals_date2],
+                    textposition='inside',
+                    legendgroup=component,
+                    showlegend=False
+                ))
+            
+            fig_amount.update_layout(barmode='stack')
+        else:
+            # Total view - simple stacked bars
+            row1, row2 = type_df1.iloc[0], type_df2.iloc[0]
+            components = ['WW_Amount', 'DP_Amount', 'PP_Amount']
+            colors_comp = ['#718096', '#E53E3E', '#48BB78']
+            
+            for comp_idx, component in enumerate(components):
+                total1 = row1['WW_Amount'] + row1['DP_Amount'] + row1['PP_Amount']
+                total2 = row2['WW_Amount'] + row2['DP_Amount'] + row2['PP_Amount']
+                
+                pct1 = (row1[component] / total1 * 100) if total1 > 0 else 0
+                pct2 = (row2[component] / total2 * 100) if total2 > 0 else 0
+                
+                fig_amount.add_trace(go.Bar(
+                    x=date_labels,
+                    y=[pct1, pct2],
+                    name=component.replace('_Amount', ''),
+                    marker_color=colors_comp[comp_idx],
+                    text=[f"{pct1:.1f}%", f"{pct2:.1f}%"],
+                    textposition='inside',
+                    hovertemplate='<b>%{x}</b><br>' + component.replace('_Amount', '') + '<br>Percentage: %{y:.1f}%<extra></extra>'
+                ))
+            
+            fig_amount.update_layout(barmode='stack')
+        
+        fig_amount.update_layout(
+            title=f"Amount Breakdown (WW / DP / PP) - {selected_type}",
+            xaxis_title="Period" if not type_group_cols else group_var,
+            yaxis_title="Percentage (%)",
+            template="plotly_white",
+            height=350,
+            showlegend=True,
+            yaxis=dict(range=[0, 100], ticksuffix="%")
+        )
+        
+        # Income breakdown chart (same logic as amount)
+        fig_income = go.Figure()
+        
+        if type_group_cols:
+            categories = sorted(set(list(type_df1[group_var]) + list(type_df2[group_var])))
+            components = ['WW_Income', 'DP_Income', 'PP_Income']
+            colors_comp = ['#718096', '#E53E3E', '#48BB78']
+            
+            for comp_idx, component in enumerate(components):
+                vals_date1 = []
+                vals_date2 = []
+                for cat in categories:
+                    row1 = type_df1[type_df1[group_var] == cat]
+                    row2 = type_df2[type_df2[group_var] == cat]
+                    
+                    total1 = row1[['WW_Income', 'DP_Income', 'PP_Income']].sum().sum() if not row1.empty else 1
+                    total2 = row2[['WW_Income', 'DP_Income', 'PP_Income']].sum().sum() if not row2.empty else 1
+                    
+                    val1 = (row1[component].iloc[0] / total1 * 100) if not row1.empty else 0
+                    val2 = (row2[component].iloc[0] / total2 * 100) if not row2.empty else 0
+                    
+                    vals_date1.append(val1)
+                    vals_date2.append(val2)
+                
+                fig_income.add_trace(go.Bar(
+                    x=[f"{cat} - {date_labels[0]}" for cat in categories],
+                    y=vals_date1,
+                    name=component.replace('_Income', ''),
+                    marker_color=colors_comp[comp_idx],
+                    text=[f"{v:.1f}%" for v in vals_date1],
+                    textposition='inside',
+                    legendgroup=component,
+                    showlegend=True
+                ))
+                fig_income.add_trace(go.Bar(
+                    x=[f"{cat} - {date_labels[1]}" for cat in categories],
+                    y=vals_date2,
+                    name=component.replace('_Income', ''),
+                    marker_color=colors_comp[comp_idx],
+                    text=[f"{v:.1f}%" for v in vals_date2],
+                    textposition='inside',
+                    legendgroup=component,
+                    showlegend=False
+                ))
+            
+            fig_income.update_layout(barmode='stack')
+        else:
+            row1, row2 = type_df1.iloc[0], type_df2.iloc[0]
+            components = ['WW_Income', 'DP_Income', 'PP_Income']
+            colors_comp = ['#718096', '#E53E3E', '#48BB78']
+            
+            for comp_idx, component in enumerate(components):
+                total1 = row1['WW_Income'] + row1['DP_Income'] + row1['PP_Income']
+                total2 = row2['WW_Income'] + row2['DP_Income'] + row2['PP_Income']
+                
+                pct1 = (row1[component] / total1 * 100) if total1 > 0 else 0
+                pct2 = (row2[component] / total2 * 100) if total2 > 0 else 0
+                
+                fig_income.add_trace(go.Bar(
+                    x=date_labels,
+                    y=[pct1, pct2],
+                    name=component.replace('_Income', ''),
+                    marker_color=colors_comp[comp_idx],
+                    text=[f"{pct1:.1f}%", f"{pct2:.1f}%"],
+                    textposition='inside',
+                    hovertemplate='<b>%{x}</b><br>' + component.replace('_Income', '') + '<br>Percentage: %{y:.1f}%<extra></extra>'
+                ))
+            
+            fig_income.update_layout(barmode='stack')
+        
+        fig_income.update_layout(
+            title=f"Income Breakdown (WW / DP / PP) - {selected_type}",
+            xaxis_title="Period" if not type_group_cols else group_var,
+            yaxis_title="Percentage (%)",
+            template="plotly_white",
+            height=350,
+            showlegend=True,
+            yaxis=dict(range=[0, 100], ticksuffix="%")
+        )
+        
+        return fig_amount, fig_income
+    
     amount_chart = create_comparison_chart(df_date1, df_date2, amount_col, "Amount")
     income_chart = create_comparison_chart(df_date1, df_date2, income_col, "Income")
     amount_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, amount_col, date1, date2, group_var, selected_type, "Amount")
@@ -937,7 +1394,10 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
     amount_division = create_division_stacked_chart(df_date1, df_date2, amount_col, "Amount")
     income_division = create_division_stacked_chart(df_date1, df_date2, income_col, "Income")
     
-    return value_boxes, amount_chart, income_chart, amount_dumbbell, income_dumbbell, amount_division, income_division, comparison_text
+    # Create Type2 breakdown charts (WW, DP, PP)
+    type2_amount_chart, type2_income_chart = create_type2_breakdown_charts(date1, date2, filter_var, filter_values, group_var, selected_type)
+    
+    return value_boxes, amount_chart, income_chart, amount_dumbbell, income_dumbbell, amount_division, income_division, type2_amount_chart, type2_income_chart, comparison_text
 
 @callback(Output("download-dataframe-xlsx", "data"), Input("export-excel-btn", "n_clicks"),
     [State("comparison-type-selector", "value"), State("comparison-date-selector", "value"),
@@ -1322,6 +1782,143 @@ def update_tool_chart(division_filter, item_filter, function_filter, year_range)
     fig.update_xaxes(tickangle=45)
     
     return fig
+
+@callback(
+    Output("scenario-weight-chart", "figure"),
+    [Input("scenario-year-range-slider", "value")]
+)
+def update_scenario_weight_chart(year_range):
+    """Create stacked bar chart showing scenario weight percentages by date"""
+    try:
+        df = scenw_sample.copy()
+        
+        # Handle None year_range (initial load)
+        if year_range is None:
+            year_range = [df['date'].dt.year.min(), df['date'].dt.year.max()]
+        
+        # Filter by year range
+        df = df[(df['date'].dt.year >= year_range[0]) & (df['date'].dt.year <= year_range[1])]
+        
+        # Prepare data
+        df['month'] = df['date'].dt.to_period('M').astype(str)
+        
+        # Aggregate weights by month and scenario (in case of duplicates)
+        df_agg = df.groupby(['month', 'ScenName'])['Weight'].sum().reset_index()
+        
+        # Pivot to get scenario weights by month
+        pivot_df = df_agg.pivot(index='month', columns='ScenName', values='Weight').fillna(0)
+        
+        # Sort by month
+        pivot_df = pivot_df.sort_index()
+        
+        # Get unique scenarios
+        unique_scenarios = sorted(df['ScenName'].unique())
+        
+        # Create figure
+        fig = go.Figure()
+        
+        # Get color sequence for scenarios
+        colors = get_color_sequence('stacked', len(unique_scenarios))
+        
+        # Add traces for each scenario
+        for i, scenario in enumerate(unique_scenarios):
+            if scenario in pivot_df.columns:
+                weights = pivot_df[scenario]
+                
+                # Convert to percentage (multiply by 100)
+                weight_pct = weights * 100
+                
+                # Format dates for hover
+                hover_dates = [pd.to_datetime(str(m)).strftime('%b-%Y') for m in pivot_df.index]
+                
+                fig.add_trace(go.Bar(
+                    x=pivot_df.index,
+                    y=weight_pct,
+                    name=scenario,
+                    marker_color=colors[i],
+                    text=[f"{w:.1f}%" if w > 2 else "" for w in weight_pct],
+                    textposition='inside',
+                    textfont=dict(color='white', size=10),
+                    customdata=list(zip(hover_dates, weight_pct)),
+                    hovertemplate='<b>%{customdata[0]}</b><br>' + f'{scenario}<br>' + 
+                                 'Weight: %{customdata[1]:.2f}%<extra></extra>'
+                ))
+        
+        fig.update_layout(
+            title="Scenario Weight Distribution Over Time",
+            xaxis_title="Month",
+            yaxis_title="Weight (%)",
+            barmode='stack',
+            template="plotly_white",
+            height=500,
+            showlegend=True,
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=1,
+                xanchor="left",
+                x=1.02
+            ),
+            margin=dict(l=50, r=150, t=60, b=100),
+            yaxis=dict(range=[0, 100], ticksuffix="%"),
+            xaxis=dict(type='category', tickangle=45)
+        )
+        
+        return fig
+        
+    except Exception as e:
+        # Return error figure if anything goes wrong
+        fig = go.Figure()
+        fig.add_annotation(text=f"Error: {str(e)}", 
+                          xref="paper", yref="paper", x=0.5, y=0.5,
+                          xanchor='center', yanchor='middle', showarrow=False,
+                          font=dict(size=12, color="red"))
+        fig.update_layout(title="Scenario Weight Distribution Over Time", template="plotly_white", height=500)
+        return fig
+
+@callback(Output("download-scenario-data", "data"), Input("scenario-export-btn", "n_clicks"),
+    [State("scenario-year-range-slider", "value")], prevent_initial_call=True)
+def export_scenario_data(n_clicks, year_range):
+    """Export scenario weight data to Excel"""
+    if n_clicks:
+        import io
+        
+        df = scenw_sample.copy()
+        df = df[(df['date'].dt.year >= year_range[0]) & (df['date'].dt.year <= year_range[1])]
+        df['month'] = df['date'].dt.to_period('M').astype(str)
+        
+        # Create pivot table for easier reading
+        pivot_data = df.pivot_table(index='month', columns='Scenario_name', 
+                                     values='Weight', aggfunc='sum', fill_value=0)
+        pivot_data = pivot_data * 100  # Convert to percentage
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # Sheet 1: Pivot table
+            pivot_data.to_excel(writer, sheet_name='Weight Distribution')
+            
+            # Sheet 2: Raw data
+            df[['month', 'Scenario_name', 'Weight']].to_excel(writer, sheet_name='Raw Data', index=False)
+        
+        output.seek(0)
+        return dcc.send_bytes(output.getvalue(), f"scenario_weights_{datetime.now().strftime('%Y%m%d')}.xlsx")
+
+@callback(Output("download-scenario-png", "data"), Input("scenario-png-btn", "n_clicks"),
+    [State("scenario-weight-chart", "figure")], prevent_initial_call=True)
+def export_scenario_png(n_clicks, fig_data):
+    """Export scenario weight chart as PNG"""
+    if n_clicks:
+        import io
+        import zipfile
+        
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            fig = go.Figure(fig_data)
+            img_bytes = fig.to_image(format="png", width=1200, height=700)
+            zip_file.writestr(f"scenario_weights_chart.png", img_bytes)
+        
+        zip_buffer.seek(0)
+        return dcc.send_bytes(zip_buffer.getvalue(), f"scenario_chart_{datetime.now().strftime('%Y%m%d')}.zip")
 
 # ============================================================================
 # RUN APP
