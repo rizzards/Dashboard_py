@@ -1,0 +1,67 @@
+﻿Date,Name,Weight
+2020-03,Base,0.5
+2020-03,Upside,0.1
+2020-03,Economy Crisis,0.2
+2020-03,Supply contract,0.2
+2020-06,Base,0.5
+2020-06,Upside,0.1
+2020-06,Economy Crisis,0.2
+2020-06,Supply contract,0.2
+2020-09,Base,0.5
+2020-09,Upside,0.1
+2020-09,Economy Crisis,0.2
+2020-09,Supply contract,0.2
+2020-12,Base,0.5
+2020-12,Upside,0.1
+2020-12,Economy Crisis,0.2
+2020-12,Supply contract,0.2
+2021-03,Base,0.55
+2021-03,Upside,0.1
+2021-03,Economy Crisis,0.2
+2021-03,Supply contract,0.15
+2021-06,Base,0.55
+2021-06,Upside,0.1
+2021-06,Economy Crisis,0.2
+2021-06,Supply contract,0.15
+2021-09,Base,0.55
+2021-09,Upside,0.1
+2021-09,Economy Crisis,0.2
+2021-09,Supply contract,0.15
+2021-12,Base,0.5
+2021-12,Upside,0.1
+2021-12,Economy Crisis,0.4
+2022-03,Base,0.5
+2022-03,Upside,0.05
+2022-03,Economy Crisis,0.45
+2022-06,Base,0.5
+2022-06,Upside,0.05
+2022-06,Economy Crisis,0.45
+2022-09,Base,0.5
+2022-09,Economy Crisis,0.5
+2022-12,Base,0.5
+2022-12,Economy Crisis,0.5
+2023-03,Base,0.45
+2023-03,Economy Crisis,0.55
+2023-06,Base,0.45
+2023-06,Economy Crisis,0.55
+2023-09,Base,0.5
+2023-09,Economy Crisis,0.3
+2023-09,Export closure,0.2
+2023-12,Base,0.5
+2023-12,Economy Crisis,0.3
+2023-12,Export closure,0.2
+2024-03,Base,0.5
+2024-03,Economy Crisis,0.25
+2024-03,Export closure,0.25
+2024-06,Base,0.5
+2024-06,Upside,0.1
+2024-06,Economy Crisis,0.3
+2024-06,Stagflation,0.2
+2024-09,Base,0.5
+2024-09,Upside,0.1
+2024-09,Economy Crisis,0.3
+2024-09,Stagflation,0.2
+2024-12,Base,0.5
+2024-12,Upside,0.1
+2024-12,Economy Crisis,0.3
+2024-12,Stagflation,0.2
