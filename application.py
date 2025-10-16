@@ -336,81 +336,81 @@ app.layout = dmc.MantineProvider(
                             dmc.TabsTab("Tool", value="tool"),
                         ]),
                         dmc.TabsPanel(value="history", children=[
-                            dmc.Grid([
-                                dmc.GridCol(span=8, children=[
-                                    dmc.Card([
-                                        dmc.CardSection([
-                                            dmc.Title("Chart Controls", order=4, mb="md"),
-                                            dmc.Group([
-                                                dmc.Stack([
-                                                    dmc.Text("Display Variable:", size="sm", fw=500, mb=5),
-                                                    dmc.SegmentedControl(id="variable-selector", value="Total", orientation="vertical",
-                                                        fullWidth=False, color="blue", size="sm", style={"width": "120px"},
-                                                        data=[{"value": "Total", "label": "Total"}, {"value": "Best", "label": "Best"},
-                                                            {"value": "Type1", "label": "Type 1"}, {"value": "Type2", "label": "Type 2"}, 
-                                                            {"value": "Type3", "label": "Type 3"}]),
-                                                ], gap="xs", align="flex-start"),
-                                                dmc.Stack([
-                                                    dmc.Text("Year Range:", size="sm", fw=500, mb=5),
-                                                    dmc.RangeSlider(
-                                                        id="year-range-slider",
-                                                        min=min_year,
-                                                        max=max_year,
-                                                        step=1,
-                                                        value=[min_year, max_year],
-                                                        marks=[{"value": year, "label": str(year)} for year in range(min_year, max_year + 1)],
-                                                        mb="md",
-                                                        minRange=1,
-                                                        size="md",
-                                                        style={"width": "100%"}
-                                                    )
-                                                ], gap="xs", style={"flex": 1}),
-                                            ], justify="space-between", align="flex-start", mb="lg"),
-                                            dmc.Grid([
-                                                dmc.GridCol(span=4, children=[dmc.Text("Filter by:", size="sm", fw=500, mb=5),
-                                                    dmc.Select(id="filter-selector", placeholder="Select filter", value="none", size="sm",
-                                                        data=[{"value": "none", "label": "No Filter"}, {"value": "Division", "label": "Division"},
-                                                            {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
-                                                dmc.GridCol(span=4, children=[dmc.Text("Stack by:", size="sm", fw=500, mb=5),
-                                                    dmc.Select(id="stack-selector", placeholder="Select stack variable", value="none", size="sm",
-                                                        data=[{"value": "none", "label": "No Stack"}, {"value": "Division", "label": "Division"},
-                                                            {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
-                                                dmc.GridCol(span=4, children=[dmc.Text("Group by:", size="sm", fw=500, mb=5),
-                                                    dmc.Select(id="group-selector", placeholder="Select group variable", value="none", size="sm",
-                                                        data=[{"value": "none", "label": "No Grouping"}, {"value": "Division", "label": "Division"},
-                                                            {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
-                                            ], gutter="md", mb="lg"),
-                                            html.Div([dmc.Text("Filter values:", size="sm", fw=500, mb=5),
-                                                dmc.MultiSelect(id="filter-values-selector", placeholder="Select values", data=[], value=[], size="sm", disabled=True)],
-                                                style={"width": "100%"}),
-                                        ], withBorder=True, inheritPadding=True, py="md"),
-                                        dmc.CardSection([dmc.Title("Summary Metrics", order=5, mb="sm"), html.Div(id="history-summary-boxes")],
-                                            inheritPadding=True, pt="xs"),
-                                        dmc.CardSection([dmc.Title("Amount Analysis", order=5, mb="sm"), dcc.Graph(id="amount-barchart", style={"height": "350px"})],
-                                            inheritPadding=True, pt="xs"),
-                                        dmc.CardSection([dmc.Title("Income Analysis", order=5, mb="sm"), dcc.Graph(id="income-barchart", style={"height": "350px"})],
-                                            inheritPadding=True, pt="xs"),
-                                        dmc.CardSection([dmc.Title("Return Ratio (Income/Amount)", order=5, mb="sm"), dcc.Graph(id="ratio-chart", style={"height": "250px"})],
-                                            inheritPadding=True, pt="xs"),
-                                        dmc.CardSection([
-                                            dmc.Button("Export History Data - Excel", id="history-export-btn", variant="outline", size="sm", fullWidth=True, mb="xs"),
-                                            dmc.Button("Export Charts as PNG", id="history-png-btn", variant="outline", size="sm", fullWidth=True),
-                                            dcc.Download(id="download-history-data"),
-                                            dcc.Download(id="download-history-png"),
-                                        ], inheritPadding=True, pt="xs"),
-                                    ], withBorder=True, shadow="sm", radius="md", mb="md")
-                                ]),
-                                dmc.GridCol(span=4, children=[
-                                    dmc.Card([
-                                        dmc.CardSection([dmc.Title("Analysis Notes", order=4, mb="md"),
-                                            dmc.Textarea(id="analysis-textbox", placeholder="Enter your analysis notes here...", autosize=True, minRows=15, maxRows=20,
-                                                value="Chart Analysis:\n\n• Use the controls on the left to modify the visualization\n• Switch between Total and Type 1/2/3 for different metrics\n• Apply filters to focus on specific data subsets\n• Use stacking to show composition\n• Group data for comparative analysis\n\nKey Insights:\n• [Add your observations here]\n• [Identify trends and patterns]\n• [Note any anomalies or interesting findings]")
-                                        ], withBorder=True, inheritPadding=True, py="xs"),
-                                        dmc.CardSection([dmc.Button("Save Analysis", id="save-analysis-btn", variant="filled", size="sm", fullWidth=True)],
-                                            inheritPadding=True, pt="xs")
-                                    ], withBorder=True, shadow="sm", radius="md", h="100%")
-                                ])
-                            ], gutter="md")
+                            dmc.Stack([
+                                dmc.Card([
+                                    dmc.CardSection([
+                                        dmc.Title("Chart Controls", order=4, mb="md"),
+                                        dmc.Stack([
+                                            dmc.Text("Display Variable:", size="sm", fw=500, mb=5),
+                                            dmc.SegmentedControl(id="variable-selector", value="Total", orientation="horizontal",
+                                                fullWidth=True, color="blue", size="sm",
+                                                data=[{"value": "Total", "label": "Total"}, {"value": "Best", "label": "Best"},
+                                                    {"value": "Type1", "label": "Type 1"}, {"value": "Type2", "label": "Type 2"}, 
+                                                    {"value": "Type3", "label": "Type 3"}]),
+                                        ], gap="xs", mb="md"),
+                                        dmc.Stack([
+                                            dmc.Text("Year Range:", size="sm", fw=500, mb=5),
+                                            dmc.RangeSlider(
+                                                id="year-range-slider",
+                                                min=min_year,
+                                                max=max_year,
+                                                step=1,
+                                                value=[min_year, max_year],
+                                                marks=[{"value": year, "label": str(year)} for year in range(min_year, max_year + 1)],
+                                                mb="md",
+                                                minRange=1,
+                                                size="md",
+                                                style={"width": "100%"}
+                                            )
+                                        ], gap="xs", mb="lg"),
+                                        dmc.Grid([
+                                            dmc.GridCol(span=4, children=[dmc.Text("Filter by:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="filter-selector", placeholder="Select filter", value="none", size="sm",
+                                                    data=[{"value": "none", "label": "No Filter"}, {"value": "Division", "label": "Division"},
+                                                        {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
+                                            dmc.GridCol(span=4, children=[dmc.Text("Stack by:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="stack-selector", placeholder="Select stack variable", value="none", size="sm",
+                                                    data=[{"value": "none", "label": "No Stack"}, {"value": "Division", "label": "Division"},
+                                                        {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
+                                            dmc.GridCol(span=4, children=[dmc.Text("Group by:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="group-selector", placeholder="Select group variable", value="none", size="sm",
+                                                    data=[{"value": "none", "label": "No Grouping"}, {"value": "Division", "label": "Division"},
+                                                        {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
+                                        ], gutter="md", mb="lg"),
+                                        html.Div([dmc.Text("Filter values:", size="sm", fw=500, mb=5),
+                                            dmc.MultiSelect(id="filter-values-selector", placeholder="Select values", data=[], value=[], size="sm", disabled=True)],
+                                            style={"width": "100%"}),
+                                    ], withBorder=True, inheritPadding=True, py="md"),
+                                ], withBorder=True, shadow="sm", radius="md", mb="md"),
+                                
+                                dmc.Card([
+                                    dmc.CardSection([dmc.Title("Analysis Notes", order=4, mb="md"),
+                                        dmc.Textarea(id="analysis-textbox", placeholder="Enter your analysis notes here...", autosize=True, minRows=4, maxRows=8,
+                                            value="Chart Analysis:\n• Use the controls above to modify the visualization\n• Switch between Total and Type 1/2/3 for different metrics\n• Key Insights: [Add your observations here]")
+                                    ], withBorder=True, inheritPadding=True, py="xs"),
+                                    dmc.CardSection([dmc.Button("Save Analysis", id="save-analysis-btn", variant="filled", size="sm", fullWidth=True)],
+                                        inheritPadding=True, pt="xs")
+                                ], withBorder=True, shadow="sm", radius="md", mb="md"),
+                                
+                                dmc.Card([
+                                    dmc.CardSection([dmc.Title("Summary Metrics", order=6, mb="sm"), html.Div(id="history-summary-boxes")],
+                                        inheritPadding=True, pt="xs"),
+                                    dmc.CardSection([dmc.Title("Amount Analysis", order=6, mb="sm"), dcc.Graph(id="amount-barchart", style={"height": "350px"})],
+                                        inheritPadding=True, pt="xs"),
+                                    dmc.CardSection([dmc.Title("Income Analysis", order=6, mb="sm"), dcc.Graph(id="income-barchart", style={"height": "350px"})],
+                                        inheritPadding=True, pt="xs"),
+                                    dmc.CardSection([dmc.Title("Return Ratio (Income/Amount)", order=6, mb="sm"), dcc.Graph(id="ratio-chart", style={"height": "250px"})],
+                                        inheritPadding=True, pt="xs"),
+                                    dmc.CardSection([
+                                        dmc.Button("Export History Data - Excel", id="history-export-btn", variant="outline", size="sm", fullWidth=True, mb="xs",
+                                            leftSection=DashIconify(icon="vscode-icons:file-type-excel", width=20)),
+                                        dmc.Button("Export Charts as PNG", id="history-png-btn", variant="outline", size="sm", fullWidth=True,
+                                            leftSection=DashIconify(icon="mdi:image", width=20)),
+                                        dcc.Download(id="download-history-data"),
+                                        dcc.Download(id="download-history-png"),
+                                    ], inheritPadding=True, pt="xs"),
+                                ], withBorder=True, shadow="sm", radius="md")
+                            ], gap="md")
                         ]),
                         dmc.TabsPanel(value="comparison", children=[
                             dmc.Stack([
@@ -455,26 +455,28 @@ app.layout = dmc.MantineProvider(
                                         inheritPadding=True, pt="xs")
                                 ], withBorder=True, shadow="sm", radius="md", mb="md"),
                                 dmc.Card([
-                                    dmc.CardSection([dmc.Title("Comparison Metrics", order=5, mb="sm"), html.Div(id="comparison-value-boxes")],
+                                    dmc.CardSection([dmc.Title("Comparison Metrics", order=6, mb="sm"), html.Div(id="comparison-value-boxes")],
                                         inheritPadding=True, pt="xs"),
                                     dmc.CardSection([dmc.Grid([
-                                        dmc.GridCol([dmc.Title("Amount Total Comparison", order=5, mb="sm"), dcc.Graph(id="comparison-var1-chart", style={"height": "300px"})], span=6),
-                                        dmc.GridCol([dmc.Title("Income Total Comparison", order=5, mb="sm"), dcc.Graph(id="comparison-var2-chart", style={"height": "300px"})], span=6),
+                                        dmc.GridCol([dmc.Title("Amount Total Comparison", order=6, mb="sm"), dcc.Graph(id="comparison-var1-chart", style={"height": "300px"})], span=6),
+                                        dmc.GridCol([dmc.Title("Income Total Comparison", order=6, mb="sm"), dcc.Graph(id="comparison-var2-chart", style={"height": "300px"})], span=6),
                                     ], gutter="md")], inheritPadding=True, pt="xs"),
-                                    dmc.CardSection([dmc.Title("Proportion Changes Analysis", order=5, mb="sm"),
+                                    dmc.CardSection([dmc.Title("Proportion Changes Analysis", order=6, mb="sm"),
                                         dmc.Grid([
                                             dmc.GridCol([dmc.Title("Amount Total Proportion Changes", order=6, mb="sm"), dcc.Graph(id="var1-dumbbell-chart", style={"height": "350px"})], span=6),
                                             dmc.GridCol([dmc.Title("Income Total Proportion Changes", order=6, mb="sm"), dcc.Graph(id="var2-dumbbell-chart", style={"height": "350px"})], span=6),
                                         ], gutter="md")], inheritPadding=True, pt="xs"),
-                                    dmc.CardSection([dmc.Title("Division Percentage Contribution", order=5, mb="sm"),
+                                    dmc.CardSection([dmc.Title("Division Percentage Contribution", order=6, mb="sm"),
                                         dmc.Grid([
                                             dmc.GridCol([dmc.Title("Amount by Division", order=6, mb="sm"), dcc.Graph(id="amount-division-chart", style={"height": "350px"})], span=6),
                                             dmc.GridCol([dmc.Title("Income by Division", order=6, mb="sm"), dcc.Graph(id="income-division-chart", style={"height": "350px"})], span=6),
                                         ], gutter="md")], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
                                         dmc.Group([
-                                            dmc.Button("Export Comparison Data - Excel", id="export-excel-btn", variant="outline", size="sm"),
-                                            dmc.Button("Export Charts as PNG", id="comparison-png-btn", variant="outline", size="sm"),
+                                            dmc.Button("Export Comparison Data - Excel", id="export-excel-btn", variant="outline", size="sm",
+                                                leftSection=DashIconify(icon="vscode-icons:file-type-excel", width=20)),
+                                            dmc.Button("Export Charts as PNG", id="comparison-png-btn", variant="outline", size="sm",
+                                                leftSection=DashIconify(icon="mdi:image", width=20)),
                                         ]),
                                         dcc.Download(id="download-dataframe-xlsx"),
                                         dcc.Download(id="download-comparison-png"),
@@ -531,8 +533,10 @@ app.layout = dmc.MantineProvider(
                                         dcc.Graph(id="tool-income-chart", style={"height": "500px"})
                                     ], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
-                                        dmc.Button("Export Tool Data - Excel", id="tool-export-btn", variant="outline", size="sm", fullWidth=True, mb="xs"),
-                                        dmc.Button("Export Charts as PNG", id="tool-png-btn", variant="outline", size="sm", fullWidth=True),
+                                        dmc.Button("Export Tool Data - Excel", id="tool-export-btn", variant="outline", size="sm", fullWidth=True, mb="xs",
+                                            leftSection=DashIconify(icon="vscode-icons:file-type-excel", width=20)),
+                                        dmc.Button("Export Charts as PNG", id="tool-png-btn", variant="outline", size="sm", fullWidth=True,
+                                            leftSection=DashIconify(icon="mdi:image", width=20)),
                                         dcc.Download(id="download-tool-data"),
                                         dcc.Download(id="download-tool-png"),
                                     ], inheritPadding=True, pt="xs"),
@@ -938,8 +942,28 @@ def export_comparison_excel(n_clicks, selected_type, selected_dates, filter_var,
             })
             summary_data.to_excel(writer, sheet_name='Summary', index=False)
             
-            # Sheet 2: Division breakdown if available
-            if 'Division' in df.columns:
+            # Sheet 2: By group/stack variable if selected
+            group_col = None
+            if group_var != "none" and group_var in ['Division', 'Type', 'Item', 'Function']:
+                group_col = group_var
+            elif stack_var != "none" and stack_var in ['Division', 'Type', 'Item', 'Function']:
+                group_col = stack_var
+            
+            if group_col and group_col in df.columns:
+                group_data = []
+                for date, df_temp in [(date1, df_date1), (date2, df_date2)]:
+                    for cat in df_temp[group_col].unique():
+                        cat_df = df_temp[df_temp[group_col] == cat]
+                        group_data.append({
+                            'Date': date.strftime('%b-%Y'),
+                            group_col: cat,
+                            'Amount': cat_df[amount_col].sum(),
+                            'Income': cat_df[income_col].sum()
+                        })
+                pd.DataFrame(group_data).to_excel(writer, sheet_name=f'By {group_col}', index=False)
+            
+            # Sheet 3: Division breakdown if available and not already exported
+            if 'Division' in df.columns and group_col != 'Division':
                 div_data = []
                 for date, df_temp in [(date1, df_date1), (date2, df_date2)]:
                     for div in df_temp['Division'].unique():
@@ -952,7 +976,7 @@ def export_comparison_excel(n_clicks, selected_type, selected_dates, filter_var,
                         })
                 pd.DataFrame(div_data).to_excel(writer, sheet_name='By Division', index=False)
             
-            # Sheet 3: Tool sample data if available
+            # Sheet 4: Tool sample data if available
             try:
                 tool_date1 = tool_sample[tool_sample['date'] == date1].copy()
                 tool_date2 = tool_sample[tool_sample['date'] == date2].copy()
@@ -979,33 +1003,58 @@ def export_history_data(n_clicks, selected_type, year_range, filter_var, filter_
         import io
         df = sample_data.copy()
         
+        # Create Best columns if needed
+        if selected_type == "Best":
+            df['Amount_Best'] = df['Amount_1'] + df['Amount_2']
+            df['Income_Best'] = df['Income_1'] + df['Income_2']
+        
         # Apply filters
         df = df[(df['date'].dt.year >= year_range[0]) & (df['date'].dt.year <= year_range[1])]
         if filter_var != "none" and filter_var in df.columns and filter_values:
             df = df[df[filter_var].isin(filter_values)]
         
-        amount_col = f'Amount_{selected_type}' if selected_type != 'Total' else 'Amount_total'
-        income_col = f'Income_{selected_type}' if selected_type != 'Total' else 'Income_total'
+        amount_col = f'Amount_{selected_type}' if selected_type not in ['Total', 'Best'] else f'Amount_{selected_type.lower()}'
+        income_col = f'Income_{selected_type}' if selected_type not in ['Total', 'Best'] else f'Income_{selected_type.lower()}'
+        
+        # Determine grouping column for export
+        group_col = None
+        if stack_var != "none" and stack_var in ['Division', 'Type', 'Item', 'Function']:
+            group_col = stack_var
+        elif group_var != "none" and group_var in ['Division', 'Type', 'Item', 'Function']:
+            group_col = group_var
         
         # Create Excel with multiple sheets
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             # Sheet 1: Amount chart data
-            amount_data = df.groupby(df['date'].dt.to_period('M'))[amount_col].sum().reset_index()
-            amount_data.columns = ['Month', 'Amount']
+            if group_col:
+                amount_data = df.groupby([df['date'].dt.to_period('M'), group_col])[amount_col].sum().reset_index()
+                amount_data.columns = ['Month', group_col, 'Amount']
+            else:
+                amount_data = df.groupby(df['date'].dt.to_period('M'))[amount_col].sum().reset_index()
+                amount_data.columns = ['Month', 'Amount']
             amount_data['Month'] = amount_data['Month'].astype(str)
             amount_data.to_excel(writer, sheet_name='Amount Chart', index=False)
             
             # Sheet 2: Income chart data
-            income_data = df.groupby(df['date'].dt.to_period('M'))[income_col].sum().reset_index()
-            income_data.columns = ['Month', 'Income']
+            if group_col:
+                income_data = df.groupby([df['date'].dt.to_period('M'), group_col])[income_col].sum().reset_index()
+                income_data.columns = ['Month', group_col, 'Income']
+            else:
+                income_data = df.groupby(df['date'].dt.to_period('M'))[income_col].sum().reset_index()
+                income_data.columns = ['Month', 'Income']
             income_data['Month'] = income_data['Month'].astype(str)
             income_data.to_excel(writer, sheet_name='Income Chart', index=False)
             
             # Sheet 3: Ratio chart data
-            ratio_data = df.groupby(df['date'].dt.to_period('M')).agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
-            ratio_data['Ratio'] = (ratio_data[income_col] / ratio_data[amount_col].replace(0, np.nan)) * 100
-            ratio_data.columns = ['Month', 'Amount', 'Income', 'Ratio (%)']
+            if group_col:
+                ratio_data = df.groupby([df['date'].dt.to_period('M'), group_col]).agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
+                ratio_data['Ratio'] = (ratio_data[income_col] / ratio_data[amount_col].replace(0, np.nan)) * 100
+                ratio_data.columns = ['Month', group_col, 'Amount', 'Income', 'Ratio (%)']
+            else:
+                ratio_data = df.groupby(df['date'].dt.to_period('M')).agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
+                ratio_data['Ratio'] = (ratio_data[income_col] / ratio_data[amount_col].replace(0, np.nan)) * 100
+                ratio_data.columns = ['Month', 'Amount', 'Income', 'Ratio (%)']
             ratio_data['Month'] = ratio_data['Month'].astype(str)
             ratio_data.to_excel(writer, sheet_name='Ratio Chart', index=False)
             
