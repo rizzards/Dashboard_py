@@ -384,11 +384,31 @@ app.layout = dmc.MantineProvider(
                                 ], withBorder=True, shadow="sm", radius="md", mb="md"),
                                 
                                 dmc.Card([
-                                    dmc.CardSection([dmc.Title("Analysis Notes", order=4, mb="md"),
-                                        dmc.Textarea(id="analysis-textbox", placeholder="Enter your analysis notes here...", autosize=True, minRows=4, maxRows=8,
-                                            value="Chart Analysis:\n• Use the controls above to modify the visualization\n• Switch between Total and Type 1/2/3 for different metrics\n• Key Insights: [Add your observations here]")
+                                    dmc.CardSection([
+                                        dmc.Title("Events Summary", order=4, mb="md"),
+                                        dmc.Stack([
+                                            dmc.Text("Select dates for events (up to 3):", size="sm", fw=500, mb=5),
+                                            dmc.MultiSelect(
+                                                id="events-date-selector",
+                                                placeholder="Select dates (YYYY-MM format)",
+                                                data=[{"value": date, "label": date} for date in pd.date_range(start=min_date, end=max_date, freq='MS').strftime('%Y-%m').tolist()],
+                                                value=[],
+                                                maxSelectedValues=3,
+                                                size="sm",
+                                                searchable=True,
+                                                mb="md"
+                                            ),
+                                            dmc.Textarea(
+                                                id="events-textbox",
+                                                placeholder="Enter events and notes for selected dates...",
+                                                autosize=True,
+                                                minRows=4,
+                                                maxRows=8,
+                                                value="Events Summary:\n• Select dates above to track important events\n• Document key milestones and observations\n• Add context for significant changes"
+                                            )
+                                        ], gap="xs")
                                     ], withBorder=True, inheritPadding=True, py="xs"),
-                                    dmc.CardSection([dmc.Button("Save Analysis", id="save-analysis-btn", variant="filled", size="sm", fullWidth=True)],
+                                    dmc.CardSection([dmc.Button("Generate Summary", id="generate-summary-btn", variant="filled", size="sm", fullWidth=True)],
                                         inheritPadding=True, pt="xs")
                                 ], withBorder=True, shadow="sm", radius="md", mb="md"),
                                 
@@ -402,9 +422,9 @@ app.layout = dmc.MantineProvider(
                                     dmc.CardSection([dmc.Title("Return Ratio (Income/Amount)", order=6, mb="sm"), dcc.Graph(id="ratio-chart", style={"height": "250px"})],
                                         inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
-                                        dmc.Button("Export History Data - Excel", id="history-export-btn", variant="outline", size="sm", fullWidth=True, mb="xs",
+                                        dmc.Button("Export History Data - Excel", id="history-export-btn", variant="filled", size="sm", fullWidth=True, mb="xs",
                                             leftSection=DashIconify(icon="vscode-icons:file-type-excel", width=20)),
-                                        dmc.Button("Export Charts as PNG", id="history-png-btn", variant="outline", size="sm", fullWidth=True,
+                                        dmc.Button("Export Charts as PNG", id="history-png-btn", variant="filled", size="sm", fullWidth=True,
                                             leftSection=DashIconify(icon="mdi:image", width=20)),
                                         dcc.Download(id="download-history-data"),
                                         dcc.Download(id="download-history-png"),
@@ -473,9 +493,9 @@ app.layout = dmc.MantineProvider(
                                         ], gutter="md")], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
                                         dmc.Group([
-                                            dmc.Button("Export Comparison Data - Excel", id="export-excel-btn", variant="outline", size="sm",
+                                            dmc.Button("Export Comparison Data - Excel", id="export-excel-btn", variant="filled", size="sm",
                                                 leftSection=DashIconify(icon="vscode-icons:file-type-excel", width=20)),
-                                            dmc.Button("Export Charts as PNG", id="comparison-png-btn", variant="outline", size="sm",
+                                            dmc.Button("Export Charts as PNG", id="comparison-png-btn", variant="filled", size="sm",
                                                 leftSection=DashIconify(icon="mdi:image", width=20)),
                                         ]),
                                         dcc.Download(id="download-dataframe-xlsx"),
@@ -533,9 +553,9 @@ app.layout = dmc.MantineProvider(
                                         dcc.Graph(id="tool-income-chart", style={"height": "500px"})
                                     ], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
-                                        dmc.Button("Export Tool Data - Excel", id="tool-export-btn", variant="outline", size="sm", fullWidth=True, mb="xs",
+                                        dmc.Button("Export Tool Data - Excel", id="tool-export-btn", variant="filled", size="sm", fullWidth=True, mb="xs",
                                             leftSection=DashIconify(icon="vscode-icons:file-type-excel", width=20)),
-                                        dmc.Button("Export Charts as PNG", id="tool-png-btn", variant="outline", size="sm", fullWidth=True,
+                                        dmc.Button("Export Charts as PNG", id="tool-png-btn", variant="filled", size="sm", fullWidth=True,
                                             leftSection=DashIconify(icon="mdi:image", width=20)),
                                         dcc.Download(id="download-tool-data"),
                                         dcc.Download(id="download-tool-png"),
@@ -1071,17 +1091,26 @@ def export_history_png(n_clicks, amount_fig, income_fig, ratio_fig, selected_typ
         import io
         import zipfile
         
-        # Create ZIP file in memory
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            # Convert each figure to PNG
-            for fig_data, name in [(amount_fig, 'amount_chart'), (income_fig, 'income_chart'), (ratio_fig, 'ratio_chart')]:
-                fig = go.Figure(fig_data)
-                img_bytes = fig.to_image(format="png", width=1200, height=600)
-                zip_file.writestr(f"{name}_{selected_type}.png", img_bytes)
-        
-        zip_buffer.seek(0)
-        return dcc.send_bytes(zip_buffer.getvalue(), f"history_charts_{selected_type}_{datetime.now().strftime('%Y%m%d')}.zip")
+        try:
+            # Create ZIP file in memory
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                # Convert each figure to PNG
+                for fig_data, name in [(amount_fig, 'amount_chart'), (income_fig, 'income_chart'), (ratio_fig, 'ratio_chart')]:
+                    fig = go.Figure(fig_data)
+                    img_bytes = fig.to_image(format="png", width=1200, height=600, engine="kaleido")
+                    zip_file.writestr(f"{name}_{selected_type}.png", img_bytes)
+            
+            zip_buffer.seek(0)
+            return dcc.send_bytes(zip_buffer.getvalue(), f"history_charts_{selected_type}_{datetime.now().strftime('%Y%m%d')}.zip")
+        except Exception as e:
+            # If kaleido fails, return error message as text file
+            error_msg = f"""PNG Export Error   
+                        The kaleido package is not properly installed. 
+                        Error details: {str(e)}
+                        """
+            error_buffer = io.BytesIO(error_msg.encode())
+            return dcc.send_bytes(error_buffer.getvalue(), f"PNG_EXPORT_ERROR.txt")
 
 @callback(Output("download-comparison-png", "data"), Input("comparison-png-btn", "n_clicks"),
     [State("comparison-var1-chart", "figure"), State("comparison-var2-chart", "figure"),
@@ -1181,10 +1210,10 @@ def export_tool_data(n_clicks, division_filter, item_filter, function_filter, ye
         return dcc.send_bytes(output.getvalue(), f"tool_data_{datetime.now().strftime('%Y%m%d')}.xlsx")
 
 
-@callback(Output("save-analysis-btn", "children"), Input("save-analysis-btn", "n_clicks"), 
-    State("analysis-textbox", "value"), prevent_initial_call=True)
-def save_analysis(n_clicks, analysis_text):
-    return "Analysis Saved!" if n_clicks else "Save Analysis"
+@callback(Output("generate-summary-btn", "children"), Input("generate-summary-btn", "n_clicks"), 
+    State("events-textbox", "value"), prevent_initial_call=True)
+def generate_summary(n_clicks, events_text):
+    return "Summary Generated!" if n_clicks else "Generate Summary"
 
 @callback(Output("save-comparison-btn", "children"), Input("save-comparison-btn", "n_clicks"), 
     State("comparison-textbox", "value"), prevent_initial_call=True)
