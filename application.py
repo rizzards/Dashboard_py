@@ -64,12 +64,18 @@ try:
     sample_data = pd.read_csv('Example_df.csv')
     sample_data['Date'] = pd.to_datetime(sample_data['Date'], format='%Y-%m')
     sample_data = sample_data.rename(columns={'Date': 'date'})
+    # Multiply all numerical columns by 1,000,000
+    numeric_cols = sample_data.select_dtypes(include=[np.number]).columns
+    sample_data[numeric_cols] = sample_data[numeric_cols] * 1000000
     sample_data = sample_data.sort_values('date').reset_index(drop=True)
     print(f"Successfully loaded {len(sample_data)} records from Example_df.csv")
 
     tool_sample = pd.read_csv('Example_correction.csv')
     tool_sample['Date'] = pd.to_datetime(tool_sample['Date'], format='%Y-%m')
     tool_sample = tool_sample.rename(columns={'Date': 'date'})
+    # Multiply all numerical columns by 1,000,000
+    numeric_cols = tool_sample.select_dtypes(include=[np.number]).columns
+    tool_sample[numeric_cols] = tool_sample[numeric_cols] * 1000000
     tool_sample = tool_sample.sort_values('date').reset_index(drop=True)
     print(f"Successfully loaded {len(tool_sample)} records from Example_correction.csv")
 
@@ -82,6 +88,9 @@ try:
     type_sample = pd.read_csv('Type_detail.csv')
     type_sample['Date'] = pd.to_datetime(type_sample['Date'], format='%Y-%m')
     type_sample = type_sample.rename(columns={'Date': 'date'})
+    # Multiply all numerical columns by 1,000,000
+    numeric_cols = type_sample.select_dtypes(include=[np.number]).columns
+    type_sample[numeric_cols] = type_sample[numeric_cols] * 1000000
     type_sample = type_sample.sort_values('date').reset_index(drop=True)
     print(f"Successfully loaded {len(type_sample)} records from Type_detail.csv")
 
@@ -123,74 +132,54 @@ def format_hover_value(value):
 
 def prepare_type_breakdown_data(date1, date2, filter_var, filter_values, group_var):
     """
-    Prepare combined data with WW, DP, and PP breakdowns for comparison
+    Prepare data with WW, DP, and PP breakdowns for comparison
     Returns: tuple of (df_date1, df_date2, group_cols) or (None, None, None) if error
     """
     try:
         # Get type_sample data for both dates
         type_date1 = type_sample[type_sample['date'] == date1].copy()
         type_date2 = type_sample[type_sample['date'] == date2].copy()
-        
-        # Get sample_data for both dates (for Type2 = Amount_2 and Income_2)
-        sample_date1 = sample_data[sample_data['date'] == date1].copy()
-        sample_date2 = sample_data[sample_data['date'] == date2].copy()
-        
+
         # Apply filters if specified
         if filter_var != "none" and filter_values:
             if filter_var in type_date1.columns:
                 type_date1 = type_date1[type_date1[filter_var].isin(filter_values)]
                 type_date2 = type_date2[type_date2[filter_var].isin(filter_values)]
-            if filter_var in sample_date1.columns:
-                sample_date1 = sample_date1[sample_date1[filter_var].isin(filter_values)]
-                sample_date2 = sample_date2[sample_date2[filter_var].isin(filter_values)]
-        
+
         # Determine grouping columns
         group_cols = []
         if group_var != "none" and group_var in ['Division', 'Function', 'Type', 'Item']:
             group_cols = [group_var]
-        
+
         # Process each date
-        def process_date(type_df, sample_df, group_cols):
+        def process_date(type_df, group_cols):
             if group_cols:
-                # Aggregate type_sample by group
-                type_agg = type_df.groupby(group_cols).agg({
+                # Aggregate by group
+                combined = type_df.groupby(group_cols).agg({
                     'WW_Amount': 'sum',
                     'DP_Amount': 'sum',
+                    'PP_Amount': 'sum',
                     'WW_Income': 'sum',
-                    'DP_Income': 'sum'
+                    'DP_Income': 'sum',
+                    'PP_Income': 'sum'
                 }).reset_index()
-                
-                # Aggregate sample_data by group (Type2 components)
-                sample_agg = sample_df.groupby(group_cols).agg({
-                    'Amount_2': 'sum',
-                    'Income_2': 'sum'
-                }).reset_index()
-                
-                # Merge
-                combined = pd.merge(type_agg, sample_agg, on=group_cols, how='outer').fillna(0)
             else:
                 # Total aggregation (no grouping)
-                type_totals = {
+                totals = {
                     'WW_Amount': type_df['WW_Amount'].sum(),
                     'DP_Amount': type_df['DP_Amount'].sum(),
+                    'PP_Amount': type_df['PP_Amount'].sum(),
                     'WW_Income': type_df['WW_Income'].sum(),
-                    'DP_Income': type_df['DP_Income'].sum()
+                    'DP_Income': type_df['DP_Income'].sum(),
+                    'PP_Income': type_df['PP_Income'].sum()
                 }
-                sample_totals = {
-                    'Amount_2': sample_df['Amount_2'].sum(),
-                    'Income_2': sample_df['Income_2'].sum()
-                }
-                combined = pd.DataFrame([{**type_totals, **sample_totals}])
-            
-            # Calculate PP (Private Portfolio) variables
-            combined['PP_Amount'] = combined['Amount_2'] - combined['WW_Amount'] - combined['DP_Amount']
-            combined['PP_Income'] = combined['Income_2'] - combined['WW_Income'] - combined['DP_Income']
-            
+                combined = pd.DataFrame([totals])
+
             return combined
-        
-        df1 = process_date(type_date1, sample_date1, group_cols)
-        df2 = process_date(type_date2, sample_date2, group_cols)
-        
+
+        df1 = process_date(type_date1, group_cols)
+        df2 = process_date(type_date2, group_cols)
+
         return df1, df2, group_cols
         
     except Exception as e:
@@ -460,18 +449,85 @@ def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old
     text_parts.extend(["SUMMARY:\n", "=" * 30 + "\n", "• [Add your key insights here]\n", "• [Note any significant patterns]\n", "• [Record actionable findings]"])
     return "".join(text_parts)
 
-def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, selected_type, var_label):
-    """Create a dumbbell chart showing proportion changes"""
+def create_comparison_heatmap(df1, df2, variable, date1, date2, group_var, selected_type, var_label):
+    """Create a heatmap showing values across two dates for many grouped items"""
     if group_var == "none":
         group_var = "Function"
-    
+
+    if group_var not in ['Division', 'Type', 'Item', 'Function']:
+        fig = go.Figure()
+        fig.add_annotation(text="Invalid grouping variable", xref="paper", yref="paper", x=0.5, y=0.5,
+            xanchor='center', yanchor='middle', showarrow=False, font=dict(size=14, color="gray"))
+        fig.update_layout(title=f"{var_label} Heatmap - {selected_type}", template="plotly_white", height=350)
+        return fig
+
+    # Aggregate data by group
+    if not df1.empty:
+        group1_data = df1.groupby(group_var)[variable].sum()
+    else:
+        group1_data = pd.Series(dtype=float)
+
+    if not df2.empty:
+        group2_data = df2.groupby(group_var)[variable].sum()
+    else:
+        group2_data = pd.Series(dtype=float)
+
+    all_groups = set()
+    if not group1_data.empty: all_groups.update(group1_data.index)
+    if not group2_data.empty: all_groups.update(group2_data.index)
+
+    if not all_groups:
+        fig = go.Figure()
+        fig.add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5,
+            xanchor='center', yanchor='middle', showarrow=False, font=dict(size=14, color="gray"))
+        fig.update_layout(title=f"{var_label} Heatmap by {group_var} - {selected_type}", template="plotly_white", height=350)
+        return fig
+
+    sorted_groups = sorted(all_groups)
+    dates = [date1.strftime('%Y-%m'), date2.strftime('%Y-%m')]
+
+    # Create matrix for heatmap
+    z_matrix = []
+    text_matrix = []
+    for group in sorted_groups:
+        val1 = group1_data.get(group, 0)
+        val2 = group2_data.get(group, 0)
+        z_matrix.append([val1, val2])
+        text_matrix.append([format_number(val1), format_number(val2)])
+
+    fig = go.Figure(data=go.Heatmap(
+        z=z_matrix,
+        x=dates,
+        y=sorted_groups,
+        text=text_matrix,
+        texttemplate="%{text}",
+        textfont={"size": 10},
+        colorscale='Blues',
+        hovertemplate='<b>%{y}</b><br>Date: %{x}<br>Value: %{text}<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title=f"{var_label} Heatmap by {group_var} - {selected_type}",
+        xaxis_title="Date",
+        yaxis_title=group_var,
+        template="plotly_white",
+        height=max(350, len(sorted_groups) * 25),
+        margin=dict(l=120, r=50, t=80, b=50)
+    )
+    return fig
+
+def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, selected_type, var_label):
+    """Create a dumbbell chart showing proportion changes (or heatmap if >5 groups)"""
+    if group_var == "none":
+        group_var = "Function"
+
     if group_var not in ['Division', 'Type', 'Item', 'Function']:
         fig = go.Figure()
         fig.add_annotation(text="Invalid grouping variable", xref="paper", yref="paper", x=0.5, y=0.5,
             xanchor='center', yanchor='middle', showarrow=False, font=dict(size=14, color="gray"))
         fig.update_layout(title=f"{var_label} Proportions - {selected_type}", template="plotly_white", height=350)
         return fig
-    
+
     if not df1.empty:
         group1_data = df1.groupby(group_var)[variable].sum()
         total1 = df1[variable].sum()
@@ -479,7 +535,7 @@ def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, s
     else:
         proportions1 = pd.Series(dtype=float)
         group1_data = pd.Series(dtype=float)
-    
+
     if not df2.empty:
         group2_data = df2.groupby(group_var)[variable].sum()
         total2 = df2[variable].sum()
@@ -487,18 +543,22 @@ def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, s
     else:
         proportions2 = pd.Series(dtype=float)
         group2_data = pd.Series(dtype=float)
-    
+
     all_groups = set()
     if not proportions1.empty: all_groups.update(proportions1.index)
     if not proportions2.empty: all_groups.update(proportions2.index)
-    
+
     if not all_groups:
         fig = go.Figure()
         fig.add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5,
             xanchor='center', yanchor='middle', showarrow=False, font=dict(size=14, color="gray"))
         fig.update_layout(title=f"{var_label} Proportions by {group_var} - {selected_type}", template="plotly_white", height=350)
         return fig
-    
+
+    # If more than 5 groups, use heatmap instead
+    if len(all_groups) > 5:
+        return create_comparison_heatmap(df1, df2, variable, date1, date2, group_var, selected_type, var_label)
+
     fig = go.Figure()
     for i, group in enumerate(sorted(all_groups)):
         prop1, prop2 = proportions1.get(group, 0), proportions2.get(group, 0)
@@ -506,7 +566,7 @@ def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, s
         max_val = max(val1, val2) if max(val1, val2) > 0 else 1
         size1 = max(10, min(30, (val1 / max_val) * 25 + 5))
         size2 = max(10, min(30, (val2 / max_val) * 25 + 5))
-        
+
         fig.add_trace(go.Scatter(x=[prop1, prop2], y=[i, i], mode='lines', line=dict(color='gray', width=2),
             showlegend=False, hoverinfo='skip'))
         fig.add_trace(go.Scatter(x=[prop1], y=[i], mode='markers',
@@ -517,7 +577,7 @@ def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, s
             marker=dict(size=size2, color='lightcoral', line=dict(width=2, color='red')),
             name=f"{date2.strftime('%Y-%m')}", legendgroup="date2", showlegend=(i == 0),
             hovertemplate=f"<b>{group}</b><br>Month: {date2.strftime('%Y-%m')}<br>Proportion: {prop2:.1f}%<br>Amount: {format_number(val2)}<extra></extra>"))
-    
+
     fig.update_layout(title=f"{var_label} Proportions by {group_var} - {selected_type}", xaxis_title="Proportion (%)",
         yaxis=dict(tickmode='array', tickvals=list(range(len(all_groups))), ticktext=list(sorted(all_groups)), title=group_var),
         template="plotly_white", height=350, showlegend=True, margin=dict(l=100, r=50, t=80, b=50))
@@ -579,22 +639,29 @@ app.layout = dmc.MantineProvider(
                                             )
                                         ], gap="xs", mb="lg"),
                                         dmc.Grid([
-                                            dmc.GridCol(span=4, children=[dmc.Text("Filter by:", size="sm", fw=500, mb=5),
-                                                dmc.Select(id="filter-selector", placeholder="Select filter", value="none", size="sm",
-                                                    data=[{"value": "none", "label": "No Filter"}, {"value": "Division", "label": "Division"},
-                                                        {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
-                                            dmc.GridCol(span=4, children=[dmc.Text("Stack by:", size="sm", fw=500, mb=5),
+                                            dmc.GridCol(span=3, children=[dmc.Text("Entity:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="entity-selector", placeholder="Select entity", value="All", size="sm",
+                                                    data=[{"value": "All", "label": "All"}] + [{"value": val, "label": val} for val in sorted(sample_data['Entity'].unique()) if val != "All"])]),
+                                            dmc.GridCol(span=3, children=[dmc.Text("Division:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="division-selector", placeholder="Select division", value="All", size="sm",
+                                                    data=[{"value": "All", "label": "All"}] + [{"value": val, "label": val} for val in sorted(sample_data['Division'].unique()) if val != "All"])]),
+                                            dmc.GridCol(span=3, children=[dmc.Text("Stack by:", size="sm", fw=500, mb=5),
                                                 dmc.Select(id="stack-selector", placeholder="Select stack variable", value="none", size="sm",
-                                                    data=[{"value": "none", "label": "No Stack"}, {"value": "Division", "label": "Division"},
-                                                        {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
-                                            dmc.GridCol(span=4, children=[dmc.Text("Group by:", size="sm", fw=500, mb=5),
+                                                    data=[{"value": "none", "label": "No Stack"}, {"value": "Type", "label": "Type"},
+                                                        {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
+                                            dmc.GridCol(span=3, children=[dmc.Text("Group by:", size="sm", fw=500, mb=5),
                                                 dmc.Select(id="group-selector", placeholder="Select group variable", value="none", size="sm",
-                                                    data=[{"value": "none", "label": "No Grouping"}, {"value": "Division", "label": "Division"},
-                                                        {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
+                                                    data=[{"value": "none", "label": "No Grouping"}, {"value": "Type", "label": "Type"},
+                                                        {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
+                                        ], gutter="md", mb="md"),
+                                        dmc.Grid([
+                                            dmc.GridCol(span=6, children=[dmc.Text("Filter by:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="filter-selector", placeholder="Select filter", value="none", size="sm",
+                                                    data=[{"value": "none", "label": "No Filter"}, {"value": "Type", "label": "Type"},
+                                                        {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
+                                            dmc.GridCol(span=6, children=[dmc.Text("Filter values:", size="sm", fw=500, mb=5),
+                                                dmc.MultiSelect(id="filter-values-selector", placeholder="Select values", data=[], value=[], size="sm", disabled=True)]),
                                         ], gutter="md", mb="lg"),
-                                        html.Div([dmc.Text("Filter values:", size="sm", fw=500, mb=5),
-                                            dmc.MultiSelect(id="filter-values-selector", placeholder="Select values", data=[], value=[], size="sm", disabled=True)],
-                                            style={"width": "100%"}),
                                     ], withBorder=True, inheritPadding=True, py="md"),
                                 ], withBorder=True, shadow="sm", radius="md", mb="md"),
                                 
@@ -627,6 +694,8 @@ app.layout = dmc.MantineProvider(
                                         inheritPadding=True, pt="xs"),
                                     dmc.CardSection([dmc.Title("Income Analysis", order=6, mb="sm"), dcc.Graph(id="income-barchart", style={"height": "350px"})],
                                         inheritPadding=True, pt="xs"),
+                                    dmc.CardSection([dmc.Title("Quarterly Income Difference", order=6, mb="sm"), dcc.Graph(id="income-diff-chart", style={"height": "350px"})],
+                                        inheritPadding=True, pt="xs"),
                                     dmc.CardSection([dmc.Title("Return Ratio (Income/Amount)", order=6, mb="sm"), dcc.Graph(id="ratio-chart", style={"height": "250px"})],
                                         inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
@@ -658,22 +727,29 @@ app.layout = dmc.MantineProvider(
                                                 styles={"dropdown": {"maxHeight": "200px", "overflowY": "auto"}, "input": {"minWidth": "300px"}})],
                                             gap="xs", style={"flex": 1})], justify="flex-start", align="flex-start", mb="lg"),
                                         dmc.Grid([
-                                            dmc.GridCol(span=4, children=[dmc.Text("Filter by:", size="sm", fw=500, mb=5),
-                                                dmc.Select(id="comparison-filter-selector", placeholder="Select filter", value="none", size="sm",
-                                                    data=[{"value": "none", "label": "No Filter"}, {"value": "Division", "label": "Division"},
-                                                        {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
-                                            dmc.GridCol(span=4, children=[dmc.Text("Stack by:", size="sm", fw=500, mb=5),
+                                            dmc.GridCol(span=3, children=[dmc.Text("Entity:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="comparison-entity-selector", placeholder="Select entity", value="All", size="sm",
+                                                    data=[{"value": "All", "label": "All"}] + [{"value": val, "label": val} for val in sorted(sample_data['Entity'].unique()) if val != "All"])]),
+                                            dmc.GridCol(span=3, children=[dmc.Text("Division:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="comparison-division-selector", placeholder="Select division", value="All", size="sm",
+                                                    data=[{"value": "All", "label": "All"}] + [{"value": val, "label": val} for val in sorted(sample_data['Division'].unique()) if val != "All"])]),
+                                            dmc.GridCol(span=3, children=[dmc.Text("Stack by:", size="sm", fw=500, mb=5),
                                                 dmc.Select(id="comparison-stack-selector", placeholder="Select stack variable", value="none", size="sm",
-                                                    data=[{"value": "none", "label": "No Stack"}, {"value": "Division", "label": "Division"},
-                                                        {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
-                                            dmc.GridCol(span=4, children=[dmc.Text("Group by:", size="sm", fw=500, mb=5),
+                                                    data=[{"value": "none", "label": "No Stack"}, {"value": "Type", "label": "Type"},
+                                                        {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
+                                            dmc.GridCol(span=3, children=[dmc.Text("Group by:", size="sm", fw=500, mb=5),
                                                 dmc.Select(id="comparison-group-selector", placeholder="Select group variable", value="none", size="sm",
-                                                    data=[{"value": "none", "label": "No Grouping"}, {"value": "Division", "label": "Division"},
-                                                        {"value": "Type", "label": "Type"}, {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
+                                                    data=[{"value": "none", "label": "No Grouping"}, {"value": "Type", "label": "Type"},
+                                                        {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
+                                        ], gutter="md", mb="md"),
+                                        dmc.Grid([
+                                            dmc.GridCol(span=6, children=[dmc.Text("Filter by:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="comparison-filter-selector", placeholder="Select filter", value="none", size="sm",
+                                                    data=[{"value": "none", "label": "No Filter"}, {"value": "Type", "label": "Type"},
+                                                        {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
+                                            dmc.GridCol(span=6, children=[dmc.Text("Filter values:", size="sm", fw=500, mb=5),
+                                                dmc.MultiSelect(id="comparison-filter-values-selector", placeholder="Select values", data=[], value=[], size="sm", disabled=True)]),
                                         ], gutter="md", mb="lg"),
-                                        html.Div([dmc.Text("Filter values:", size="sm", fw=500, mb=5),
-                                            dmc.MultiSelect(id="comparison-filter-values-selector", placeholder="Select values", data=[], value=[], size="sm", disabled=True)],
-                                            style={"width": "100%"}),
                                     ], withBorder=True, inheritPadding=True, py="md"),
                                 ], withBorder=True, shadow="sm", radius="md", mb="md"),
                                 dmc.Card([
@@ -706,6 +782,8 @@ app.layout = dmc.MantineProvider(
                                             dmc.GridCol([dmc.Title("Amount Breakdown", order=6, mb="sm"), dcc.Graph(id="type2-amount-chart", style={"height": "350px"})], span=6),
                                             dmc.GridCol([dmc.Title("Income Breakdown", order=6, mb="sm"), dcc.Graph(id="type2-income-chart", style={"height": "350px"})], span=6),
                                         ], gutter="md")], inheritPadding=True, pt="xs"),
+                                    dmc.CardSection([dmc.Title("Return Ratio (Income/Amount) Comparison", order=6, mb="sm"),
+                                        dcc.Graph(id="ratio-comparison-chart", style={"height": "400px"})], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
                                         dmc.Group([
                                             dmc.Button("Export Comparison Data - Excel", id="export-excel-btn", variant="filled", size="sm",
@@ -876,10 +954,12 @@ def update_filter_values(filter_var):
         return options, False, list(unique_values)
     return [], True, []
 
-@callback([Output("history-summary-boxes", "children"), Output("amount-barchart", "figure"), Output("income-barchart", "figure"), Output("ratio-chart", "figure")],
-    [Input("variable-selector", "value"), Input("filter-selector", "value"), Input("filter-values-selector", "value"),
+@callback([Output("history-summary-boxes", "children"), Output("amount-barchart", "figure"), Output("income-barchart", "figure"),
+           Output("income-diff-chart", "figure"), Output("ratio-chart", "figure")],
+    [Input("variable-selector", "value"), Input("entity-selector", "value"), Input("division-selector", "value"),
+     Input("filter-selector", "value"), Input("filter-values-selector", "value"),
      Input("stack-selector", "value"), Input("group-selector", "value"), Input("year-range-slider", "value")])
-def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_var, year_range):
+def update_barcharts(selected_type, entity_filter, division_filter, filter_var, filter_values, stack_var, group_var, year_range):
     if selected_type == "Total":
         amount_col, income_col = "Amount_total", "Income_total"
     elif selected_type == "Best":
@@ -891,15 +971,24 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
         amount_col, income_col = "Amount_2", "Income_2"
     else:
         amount_col, income_col = "Amount_3", "Income_3"
-    
+
     df = sample_data.copy()
-    
+
     # Create Best columns if needed
     if selected_type == "Best":
         df['Amount_Best'] = df['Amount_1'] + df['Amount_2']
         df['Income_Best'] = df['Income_1'] + df['Income_2']
-    
+
     df = df[(df['date'].dt.year >= year_range[0]) & (df['date'].dt.year <= year_range[1])]
+
+    # Apply Entity filter
+    if entity_filter != "All":
+        df = df[df['Entity'] == entity_filter]
+
+    # Apply Division filter
+    if division_filter != "All":
+        df = df[df['Division'] == division_filter]
+
     if filter_var != "none" and filter_var in df.columns and filter_values:
         df = df[df[filter_var].isin(filter_values)]
     df['month'] = df['date'].dt.to_period('M').astype(str)
@@ -1009,8 +1098,77 @@ def update_barcharts(selected_type, filter_var, filter_values, stack_var, group_
         legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02))
     ratio_fig.update_xaxes(tickangle=45)
     ratio_fig.update_yaxes(ticksuffix="%")
-    
-    return summary_boxes, amount_chart, income_chart, ratio_fig
+
+    # Create quarterly income difference chart
+    income_diff_fig = go.Figure()
+    if not df.empty:
+        # Convert month to datetime and extract quarter
+        monthly_data = df.groupby('month').agg({income_col: 'sum'}).reset_index()
+        monthly_data['date_obj'] = pd.to_datetime(monthly_data['month'].astype(str))
+        monthly_data['quarter'] = monthly_data['date_obj'].dt.to_period('Q').astype(str)
+
+        # Group by quarter
+        quarterly_data = monthly_data.groupby('quarter')[income_col].sum().reset_index()
+        quarterly_data = quarterly_data.sort_values('quarter')
+
+        # Calculate quarter-over-quarter differences
+        if len(quarterly_data) > 1:
+            quarterly_data['income_diff'] = quarterly_data[income_col].diff()
+            quarterly_data['pct_change'] = quarterly_data[income_col].pct_change() * 100
+
+            # Create bar chart with colors based on positive/negative
+            colors = ['green' if val > 0 else 'red' if val < 0 else 'gray' for val in quarterly_data['income_diff'].fillna(0)]
+
+            income_diff_fig.add_trace(go.Bar(
+                x=quarterly_data['quarter'],
+                y=quarterly_data['income_diff'].fillna(0),
+                marker_color=colors,
+                text=[format_number(v) if pd.notna(v) else 'N/A' for v in quarterly_data['income_diff']],
+                textposition='auto',
+                customdata=list(zip(
+                    quarterly_data['quarter'],
+                    [format_number(v) if pd.notna(v) else 'N/A' for v in quarterly_data['income_diff']],
+                    [f"{v:.1f}%" if pd.notna(v) else 'N/A' for v in quarterly_data['pct_change']]
+                )),
+                hovertemplate='<b>%{customdata[0]}</b><br>Difference: %{customdata[1]}<br>Change: %{customdata[2]}<extra></extra>'
+            ))
+
+            income_diff_fig.update_layout(
+                title=f"Quarterly Income Difference - {selected_type}",
+                xaxis_title="Quarter",
+                yaxis_title="Income Difference",
+                template="plotly_white",
+                height=350,
+                showlegend=False,
+                margin=dict(l=50, r=50, t=60, b=50)
+            )
+            income_diff_fig.update_xaxes(tickangle=45)
+        else:
+            income_diff_fig.add_annotation(
+                text="Insufficient data for quarterly comparison",
+                xref="paper", yref="paper", x=0.5, y=0.5,
+                xanchor='center', yanchor='middle', showarrow=False,
+                font=dict(size=14, color="gray")
+            )
+            income_diff_fig.update_layout(
+                title=f"Quarterly Income Difference - {selected_type}",
+                template="plotly_white",
+                height=350
+            )
+    else:
+        income_diff_fig.add_annotation(
+            text="No data available",
+            xref="paper", yref="paper", x=0.5, y=0.5,
+            xanchor='center', yanchor='middle', showarrow=False,
+            font=dict(size=14, color="gray")
+        )
+        income_diff_fig.update_layout(
+            title=f"Quarterly Income Difference - {selected_type}",
+            template="plotly_white",
+            height=350
+        )
+
+    return summary_boxes, amount_chart, income_chart, income_diff_fig, ratio_fig
 
 @callback(Output("comparison-date-selector", "data"), Input("main-tabs", "value"))
 def populate_comparison_dates(active_tab):
@@ -1034,16 +1192,18 @@ def update_comparison_filter_values(filter_var):
     return [], True, []
 
 @callback(
-    [Output("comparison-value-boxes", "children"), Output("comparison-var1-chart", "figure"), 
-     Output("comparison-var2-chart", "figure"), Output("var1-dumbbell-chart", "figure"), 
+    [Output("comparison-value-boxes", "children"), Output("comparison-var1-chart", "figure"),
+     Output("comparison-var2-chart", "figure"), Output("var1-dumbbell-chart", "figure"),
      Output("var2-dumbbell-chart", "figure"), Output("amount-division-chart", "figure"),
      Output("income-division-chart", "figure"), Output("type2-amount-chart", "figure"),
-     Output("type2-income-chart", "figure"), Output("comparison-textbox", "value")],
-    [Input("comparison-type-selector", "value"), Input("comparison-date-selector", "value"), 
+     Output("type2-income-chart", "figure"), Output("ratio-comparison-chart", "figure"),
+     Output("comparison-textbox", "value")],
+    [Input("comparison-type-selector", "value"), Input("comparison-date-selector", "value"),
+     Input("comparison-entity-selector", "value"), Input("comparison-division-selector", "value"),
      Input("comparison-filter-selector", "value"), Input("comparison-filter-values-selector", "value"),
      Input("comparison-stack-selector", "value"), Input("comparison-group-selector", "value")]
 )
-def update_enhanced_comparison_content(selected_type, selected_dates, filter_var, filter_values, stack_var, group_var):
+def update_enhanced_comparison_content(selected_type, selected_dates, entity_filter, division_filter, filter_var, filter_values, stack_var, group_var):
     if selected_type == "Total":
         amount_col, income_col = "Amount_total", "Income_total"
     elif selected_type == "Best":
@@ -1054,28 +1214,38 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
         amount_col, income_col = "Amount_2", "Income_2"
     else:
         amount_col, income_col = "Amount_3", "Income_3"
-    
+
     empty_fig = go.Figure()
     empty_fig.update_layout(title="Select 2 dates to compare", template="plotly_white", height=300, showlegend=False)
     empty_fig.add_annotation(text="Please select exactly 2 dates for comparison", xref="paper", yref="paper",
         x=0.5, y=0.5, xanchor='center', yanchor='middle', showarrow=False, font=dict(size=14, color="gray"))
-    
+
     if not selected_dates or len(selected_dates) != 2:
         empty_boxes = dmc.Center([dmc.Text("Please select exactly 2 dates to see comparison metrics", c="dimmed", size="sm")], style={"padding": "20px"})
         default_text = "Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis"
-        return empty_boxes, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, default_text
-    
+        return empty_boxes, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, default_text
+
     date1, date2 = sorted([pd.to_datetime(date + '-01') for date in selected_dates])
     df = sample_data.copy()
-    
+
     # Create Best columns if needed
     if selected_type == "Best":
         df['Amount_Best'] = df['Amount_1'] + df['Amount_2']
         df['Income_Best'] = df['Income_1'] + df['Income_2']
-    
+
     df_date1 = df[df['date'].dt.to_period('M') == date1.to_period('M')]
     df_date2 = df[df['date'].dt.to_period('M') == date2.to_period('M')]
-    
+
+    # Apply Entity filter
+    if entity_filter != "All":
+        df_date1 = df_date1[df_date1['Entity'] == entity_filter]
+        df_date2 = df_date2[df_date2['Entity'] == entity_filter]
+
+    # Apply Division filter
+    if division_filter != "All":
+        df_date1 = df_date1[df_date1['Division'] == division_filter]
+        df_date2 = df_date2[df_date2['Division'] == division_filter]
+
     if filter_var != "none" and filter_var in df.columns and filter_values:
         df_date1 = df_date1[df_date1[filter_var].isin(filter_values)]
         df_date2 = df_date2[df_date2[filter_var].isin(filter_values)]
@@ -1396,24 +1566,117 @@ def update_enhanced_comparison_content(selected_type, selected_dates, filter_var
     
     # Create Type2 breakdown charts (WW, DP, PP)
     type2_amount_chart, type2_income_chart = create_type2_breakdown_charts(date1, date2, filter_var, filter_values, group_var, selected_type)
-    
-    return value_boxes, amount_chart, income_chart, amount_dumbbell, income_dumbbell, amount_division, income_division, type2_amount_chart, type2_income_chart, comparison_text
+
+    # Create ratio comparison chart
+    ratio_comparison_fig = go.Figure()
+    if group_var != "none" and group_var in ['Type', 'Item', 'Function']:
+        # Grouped ratio comparison (horizontal bars)
+        groups_date1 = df_date1.groupby(group_var).agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
+        groups_date2 = df_date2.groupby(group_var).agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
+
+        groups_date1['ratio'] = (groups_date1[income_col] / groups_date1[amount_col].replace(0, np.nan)) * 100
+        groups_date2['ratio'] = (groups_date2[income_col] / groups_date2[amount_col].replace(0, np.nan)) * 100
+
+        all_groups = sorted(set(groups_date1[group_var].tolist() + groups_date2[group_var].tolist()))
+
+        ratio_data_date1 = groups_date1.set_index(group_var)['ratio'].reindex(all_groups, fill_value=0)
+        ratio_data_date2 = groups_date2.set_index(group_var)['ratio'].reindex(all_groups, fill_value=0)
+
+        ratio_comparison_fig.add_trace(go.Bar(
+            y=all_groups, x=ratio_data_date1, name=date1.strftime('%Y-%m'),
+            orientation='h', marker_color='lightgray',
+            text=[f"{v:.1f}%" for v in ratio_data_date1],
+            textposition='auto',
+            hovertemplate='<b>%{y}</b><br>Ratio: %{x:.2f}%<extra></extra>'
+        ))
+        ratio_comparison_fig.add_trace(go.Bar(
+            y=all_groups, x=ratio_data_date2, name=date2.strftime('%Y-%m'),
+            orientation='h', marker_color='lightcoral',
+            text=[f"{v:.1f}%" for v in ratio_data_date2],
+            textposition='auto',
+            hovertemplate='<b>%{y}</b><br>Ratio: %{x:.2f}%<extra></extra>'
+        ))
+
+        ratio_comparison_fig.update_layout(
+            title=f"Return Ratio by {group_var} - {selected_type}",
+            xaxis_title="Ratio (%)",
+            yaxis_title=group_var,
+            template="plotly_white",
+            height=max(400, len(all_groups) * 40),
+            barmode='group',
+            showlegend=True
+        )
+    else:
+        # Simple ratio comparison (no grouping)
+        ratio_old = (income_old / amount_old * 100) if amount_old != 0 else 0
+        ratio_new = (income_new / amount_new * 100) if amount_new != 0 else 0
+
+        ratio_comparison_fig.add_trace(go.Bar(
+            x=[date1.strftime('%Y-%m'), date2.strftime('%Y-%m')],
+            y=[ratio_old, ratio_new],
+            marker_color=['lightgray', 'lightcoral'],
+            text=[f"{ratio_old:.2f}%", f"{ratio_new:.2f}%"],
+            textposition='auto',
+            hovertemplate='<b>%{x}</b><br>Ratio: %{y:.2f}%<extra></extra>'
+        ))
+
+        ratio_comparison_fig.update_layout(
+            title=f"Return Ratio Comparison - {selected_type}",
+            xaxis_title="Date",
+            yaxis_title="Ratio (%)",
+            template="plotly_white",
+            height=400,
+            showlegend=False
+        )
+
+    # Add ratio analysis to comparison text
+    ratio_text_parts = []
+    if group_var != "none" and group_var in ['Type', 'Item', 'Function']:
+        ratio_text_parts.append("\n\nRETURN RATIO ANALYSIS:\n" + "=" * 30 + "\n")
+        for group in all_groups:
+            r1 = ratio_data_date1.get(group, 0)
+            r2 = ratio_data_date2.get(group, 0)
+            change = r2 - r1
+            direction = "improved" if change > 0 else "declined" if change < 0 else "remained stable"
+            ratio_text_parts.append(f"• {group}: {r1:.2f}% → {r2:.2f}% ({direction}, {change:+.2f}pp)\n")
+    else:
+        ratio_old = (income_old / amount_old * 100) if amount_old != 0 else 0
+        ratio_new = (income_new / amount_new * 100) if amount_new != 0 else 0
+        change = ratio_new - ratio_old
+        direction = "improved" if change > 0 else "declined" if change < 0 else "remained stable"
+        ratio_text_parts.append(f"\n\nRETURN RATIO ANALYSIS:\n" + "=" * 30 + "\n")
+        ratio_text_parts.append(f"• Overall ratio {direction}: {ratio_old:.2f}% → {ratio_new:.2f}% ({change:+.2f}pp)\n")
+
+    comparison_text = comparison_text + "".join(ratio_text_parts)
+
+    return value_boxes, amount_chart, income_chart, amount_dumbbell, income_dumbbell, amount_division, income_division, type2_amount_chart, type2_income_chart, ratio_comparison_fig, comparison_text
 
 @callback(Output("download-dataframe-xlsx", "data"), Input("export-excel-btn", "n_clicks"),
     [State("comparison-type-selector", "value"), State("comparison-date-selector", "value"),
+     State("comparison-entity-selector", "value"), State("comparison-division-selector", "value"),
      State("comparison-filter-selector", "value"), State("comparison-filter-values-selector", "value"),
      State("comparison-group-selector", "value"), State("comparison-stack-selector", "value")], prevent_initial_call=True)
-def export_comparison_excel(n_clicks, selected_type, selected_dates, filter_var, filter_values, group_var, stack_var):
+def export_comparison_excel(n_clicks, selected_type, selected_dates, entity_filter, division_filter, filter_var, filter_values, group_var, stack_var):
     """Export all comparison chart data to multi-sheet Excel"""
     if n_clicks and selected_dates and len(selected_dates) == 2:
         import io
         date1, date2 = sorted([pd.to_datetime(date + '-01') for date in selected_dates])
         df = sample_data.copy()
-        
+
         # Filter by dates
         df_date1 = df[df['date'].dt.to_period('M') == date1.to_period('M')].copy()
         df_date2 = df[df['date'].dt.to_period('M') == date2.to_period('M')].copy()
-        
+
+        # Apply Entity filter
+        if entity_filter != "All":
+            df_date1 = df_date1[df_date1['Entity'] == entity_filter]
+            df_date2 = df_date2[df_date2['Entity'] == entity_filter]
+
+        # Apply Division filter
+        if division_filter != "All":
+            df_date1 = df_date1[df_date1['Division'] == division_filter]
+            df_date2 = df_date2[df_date2['Division'] == division_filter]
+
         # Apply filters
         if filter_var != "none" and filter_var in df.columns and filter_values:
             df_date1 = df_date1[df_date1[filter_var].isin(filter_values)]
@@ -1554,24 +1817,25 @@ def export_history_data(n_clicks, selected_type, year_range, filter_var, filter_
         return dcc.send_bytes(output.getvalue(), f"history_data_{selected_type}_{datetime.now().strftime('%Y%m%d')}.xlsx")
 
 @callback(Output("download-history-png", "data"), Input("history-png-btn", "n_clicks"),
-    [State("amount-barchart", "figure"), State("income-barchart", "figure"), State("ratio-chart", "figure"),
-     State("variable-selector", "value")], prevent_initial_call=True)
-def export_history_png(n_clicks, amount_fig, income_fig, ratio_fig, selected_type):
+    [State("amount-barchart", "figure"), State("income-barchart", "figure"), State("income-diff-chart", "figure"),
+     State("ratio-chart", "figure"), State("variable-selector", "value")], prevent_initial_call=True)
+def export_history_png(n_clicks, amount_fig, income_fig, income_diff_fig, ratio_fig, selected_type):
     """Export all History tab charts as PNG files in a ZIP"""
     if n_clicks:
         import io
         import zipfile
-        
+
         try:
             # Create ZIP file in memory
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 # Convert each figure to PNG
-                for fig_data, name in [(amount_fig, 'amount_chart'), (income_fig, 'income_chart'), (ratio_fig, 'ratio_chart')]:
+                for fig_data, name in [(amount_fig, 'amount_chart'), (income_fig, 'income_chart'),
+                                       (income_diff_fig, 'income_diff_chart'), (ratio_fig, 'ratio_chart')]:
                     fig = go.Figure(fig_data)
                     img_bytes = fig.to_image(format="png", width=1200, height=600, engine="kaleido")
                     zip_file.writestr(f"{name}_{selected_type}.png", img_bytes)
-            
+
             zip_buffer.seek(0)
             return dcc.send_bytes(zip_buffer.getvalue(), f"history_charts_{selected_type}_{datetime.now().strftime('%Y%m%d')}.zip")
         except Exception as e:
@@ -1587,13 +1851,13 @@ def export_history_png(n_clicks, amount_fig, income_fig, ratio_fig, selected_typ
     [State("comparison-var1-chart", "figure"), State("comparison-var2-chart", "figure"),
      State("var1-dumbbell-chart", "figure"), State("var2-dumbbell-chart", "figure"),
      State("amount-division-chart", "figure"), State("income-division-chart", "figure"),
-     State("comparison-type-selector", "value")], prevent_initial_call=True)
-def export_comparison_png(n_clicks, var1_fig, var2_fig, dump1_fig, dump2_fig, amt_div_fig, inc_div_fig, selected_type):
+     State("ratio-comparison-chart", "figure"), State("comparison-type-selector", "value")], prevent_initial_call=True)
+def export_comparison_png(n_clicks, var1_fig, var2_fig, dump1_fig, dump2_fig, amt_div_fig, inc_div_fig, ratio_fig, selected_type):
     """Export all Comparison tab charts as PNG files in a ZIP"""
     if n_clicks:
         import io
         import zipfile
-        
+
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             charts = [
@@ -1602,7 +1866,8 @@ def export_comparison_png(n_clicks, var1_fig, var2_fig, dump1_fig, dump2_fig, am
                 (dump1_fig, 'amount_proportions'),
                 (dump2_fig, 'income_proportions'),
                 (amt_div_fig, 'amount_by_division'),
-                (inc_div_fig, 'income_by_division')
+                (inc_div_fig, 'income_by_division'),
+                (ratio_fig, 'ratio_comparison')
             ]
             for fig_data, name in charts:
                 fig = go.Figure(fig_data)
