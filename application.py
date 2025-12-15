@@ -94,11 +94,22 @@ try:
     type_sample = type_sample.sort_values('date').reset_index(drop=True)
     print(f"Successfully loaded {len(type_sample)} records from Type_detail.csv")
 
+    # Load Events data
+    try:
+        events_data = pd.read_excel('Events.xlsx')
+        events_data['Date'] = pd.to_datetime(events_data['Date'], format='%Y-%m')
+        events_data = events_data.sort_values('Date').reset_index(drop=True)
+        print(f"Successfully loaded {len(events_data)} records from Events.xlsx")
+    except FileNotFoundError:
+        print("Events.xlsx not found. Creating empty events DataFrame.")
+        events_data = pd.DataFrame(columns=['Date', 'Division', 'Metric', 'Summary', 'Additional_Details'])
+
 except FileNotFoundError:
     print("Example_df.csv not found.")
     print("Example_correction.csv not found.")
     print("Example_scenw.csv not found.")
     print("Type_detail.csv not found.")
+    events_data = pd.DataFrame(columns=['Date', 'Division', 'Metric', 'Summary', 'Additional_Details'])
 
 min_year = sample_data['date'].dt.year.min()
 max_year = sample_data['date'].dt.year.max()
@@ -668,23 +679,29 @@ app.layout = dmc.MantineProvider(
                                 dmc.Card([
                                     dmc.CardSection([
                                         dmc.Title("Events Summary", order=4, mb="md"),
+                                        dmc.Grid([
+                                            dmc.GridCol(span=4, children=[dmc.Text("Select Date:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="events-date-selector", placeholder="Select date", data=[], value=None, size="sm",
+                                                    searchable=True, clearable=True, leftSection=DashIconify(icon="material-symbols:calendar-month", width=20))]),
+                                            dmc.GridCol(span=4, children=[dmc.Text("Division:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="events-division-selector", placeholder="Select division", value="All", size="sm",
+                                                    data=[{"value": "All", "label": "All"}] + [{"value": val, "label": val} for val in sorted(sample_data['Division'].unique()) if val != "All"])]),
+                                            dmc.GridCol(span=4, children=[dmc.Text("Metric:", size="sm", fw=500, mb=5),
+                                                dmc.Select(id="events-metric-selector", placeholder="Select metric", value="Amount", size="sm",
+                                                    data=[{"value": "Amount", "label": "Amount"}, {"value": "Income", "label": "Income"}, {"value": "Ratio", "label": "Ratio"}])]),
+                                        ], gutter="md", mb="md"),
                                         dmc.Stack([
-                                            dmc.Text("Select dates:", size="sm", fw=500, mb=5),                                            
-                                            dmc.MultiSelect(id="events-date-selector", placeholder="Select maximum 3 dates", data=[], value=[],
-                                                maxValues=3, size="sm", searchable=True, clearable=True, leftSection=DashIconify(icon="material-symbols:calendar-month", width=20),
-                                                styles={"dropdown": {"maxHeight": "200px", "overflowY": "auto"}, "input": {"minWidth": "300px"}}),
+                                            dmc.Switch(id="events-details-toggle", label="Include Additional Details", checked=False, size="sm"),
                                             dmc.Textarea(
                                                 id="events-textbox",
-                                                placeholder="Enter events and notes for selected dates...",
+                                                placeholder="Select date, division, and metric to view summary...",
                                                 autosize=True,
-                                                minRows=4,
-                                                maxRows=8,
-                                                value="Events Summary:\n• Select dates above to track important events\n• Document key milestones and observations\n• Add context for significant changes"
+                                                minRows=6,
+                                                maxRows=12,
+                                                value=""
                                             )
                                         ], gap="xs")
-                                    ], withBorder=True, inheritPadding=True, py="xs"),
-                                    dmc.CardSection([dmc.Button("Generate Summary", id="generate-summary-btn", variant="filled", size="sm", fullWidth=True)],
-                                        inheritPadding=True, pt="xs")
+                                    ], withBorder=True, inheritPadding=True, py="md"),
                                 ], withBorder=True, shadow="sm", radius="md", mb="md"),
                                 
                                 dmc.Card([
@@ -767,6 +784,8 @@ app.layout = dmc.MantineProvider(
                                         dmc.GridCol([dmc.Title("Amount Total Comparison", order=6, mb="sm"), dcc.Graph(id="comparison-var1-chart", style={"height": "300px"})], span=6),
                                         dmc.GridCol([dmc.Title("Income Total Comparison", order=6, mb="sm"), dcc.Graph(id="comparison-var2-chart", style={"height": "300px"})], span=6),
                                     ], gutter="md")], inheritPadding=True, pt="xs"),
+                                    dmc.CardSection([dmc.Title("Return Ratio (Income/Amount) Comparison", order=6, mb="sm"),
+                                        dcc.Graph(id="ratio-comparison-chart", style={"height": "400px"})], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([dmc.Title("Proportion Changes Analysis", order=6, mb="sm"),
                                         dmc.Grid([
                                             dmc.GridCol([dmc.Title("Amount Total Proportion Changes", order=6, mb="sm"), dcc.Graph(id="var1-dumbbell-chart", style={"height": "350px"})], span=6),
@@ -782,8 +801,6 @@ app.layout = dmc.MantineProvider(
                                             dmc.GridCol([dmc.Title("Amount Breakdown", order=6, mb="sm"), dcc.Graph(id="type2-amount-chart", style={"height": "350px"})], span=6),
                                             dmc.GridCol([dmc.Title("Income Breakdown", order=6, mb="sm"), dcc.Graph(id="type2-income-chart", style={"height": "350px"})], span=6),
                                         ], gutter="md")], inheritPadding=True, pt="xs"),
-                                    dmc.CardSection([dmc.Title("Return Ratio (Income/Amount) Comparison", order=6, mb="sm"),
-                                        dcc.Graph(id="ratio-comparison-chart", style={"height": "400px"})], inheritPadding=True, pt="xs"),
                                     dmc.CardSection([
                                         dmc.Group([
                                             dmc.Button("Export Comparison Data - Excel", id="export-excel-btn", variant="filled", size="sm",
@@ -1263,7 +1280,22 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
     
     comparison_text = generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old, income_new, date1, date2,
         filter_var, filter_values, group_var, df_date1, df_date2, selected_type, amount_col, income_col)
-    
+
+    # ========== LLM FINANCIAL ANALYSIS PLACEHOLDER ==========
+    # Uncomment below to enable AI-powered financial analysis using Azure OpenAI gpt-4o
+    # The LLM analyzes the comparison_text and provides professional insights
+    # without hallucinating numbers (only uses data explicitly stated in comparison_text)
+    #
+    # from llm_financial_analyst import analyze_comparison_with_llm
+    #
+    # llm_analysis = analyze_comparison_with_llm(comparison_text)
+    #
+    # # Append LLM analysis to comparison text
+    # comparison_text = comparison_text + "\n\n" + "="*60 + "\n"
+    # comparison_text = comparison_text + "AI FINANCIAL ANALYSIS:\n" + "="*60 + "\n\n"
+    # comparison_text = comparison_text + llm_analysis
+    # ========================================================
+
     value_boxes = dmc.SimpleGrid([
         dmc.Card([dmc.Stack([dmc.Text(f"Amount Change - {selected_type}", size="sm", c="dimmed"),
             dmc.Group([dmc.Text(f"{amount_change:+.1f}%", size="xl", fw=700, c="green" if amount_change >= 0 else "red"),
@@ -1946,10 +1978,44 @@ def export_tool_data(n_clicks, division_filter, item_filter, function_filter, ye
         return dcc.send_bytes(output.getvalue(), f"tool_data_{datetime.now().strftime('%Y%m%d')}.xlsx")
 
 
-@callback(Output("generate-summary-btn", "children"), Input("generate-summary-btn", "n_clicks"), 
-    State("events-textbox", "value"), prevent_initial_call=True)
-def generate_summary(n_clicks, events_text):
-    return "Summary Generated!" if n_clicks else "Generate Summary"
+@callback(Output("events-date-selector", "data"), Input("main-tabs", "value"))
+def populate_events_dates(active_tab):
+    if active_tab == "history":
+        dates = sorted(sample_data['date'].dt.to_period('M').astype(str).unique(), reverse=True)
+        return [{"value": date, "label": date} for date in dates]
+    return []
+
+@callback(
+    Output("events-textbox", "value"),
+    [Input("events-date-selector", "value"), Input("events-division-selector", "value"),
+     Input("events-metric-selector", "value"), Input("events-details-toggle", "checked")]
+)
+def update_events_summary(selected_date, selected_division, selected_metric, include_details):
+    if not selected_date or not selected_division or not selected_metric:
+        return "Select date, division, and metric to view summary..."
+
+    # Convert selected_date to datetime for filtering
+    date_obj = pd.to_datetime(selected_date + '-01')
+
+    # Filter events data
+    filtered = events_data[
+        (events_data['Date'] == date_obj) &
+        (events_data['Division'] == selected_division) &
+        (events_data['Metric'] == selected_metric)
+    ]
+
+    if filtered.empty:
+        return f"No summary available for {selected_metric} in {selected_division} for {selected_date}."
+
+    # Get the summary text
+    row = filtered.iloc[0]
+    summary_text = row['Summary']
+
+    # Add additional details if toggle is on
+    if include_details and pd.notna(row['Additional_Details']):
+        summary_text += f"\n\n{row['Additional_Details']}"
+
+    return summary_text
 
 @callback(Output("save-comparison-btn", "children"), Input("save-comparison-btn", "n_clicks"), 
     State("comparison-textbox", "value"), prevent_initial_call=True)
