@@ -771,6 +771,10 @@ app.layout = dmc.MantineProvider(
                                 ], withBorder=True, shadow="sm", radius="md", mb="md"),
                                 dmc.Card([
                                     dmc.CardSection([dmc.Title("Comparison Notes", order=4, mb="md"),
+                                        dmc.Group([
+                                            dmc.Switch(id="financial-analyst-toggle", label="AI Financial Analyst", checked=False, size="sm",
+                                                description="Enable LLM-powered analysis (requires Azure OpenAI setup)")
+                                        ], mb="sm"),
                                         dmc.Textarea(id="comparison-textbox", placeholder="Enter your comparison analysis notes here...", autosize=True, minRows=8, maxRows=15,
                                             value="Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis\n• Monitor value changes and ratios\n• Identify significant trends between periods")],
                                         withBorder=True, inheritPadding=True, py="xs"),
@@ -1218,9 +1222,10 @@ def update_comparison_filter_values(filter_var):
     [Input("comparison-type-selector", "value"), Input("comparison-date-selector", "value"),
      Input("comparison-entity-selector", "value"), Input("comparison-division-selector", "value"),
      Input("comparison-filter-selector", "value"), Input("comparison-filter-values-selector", "value"),
-     Input("comparison-stack-selector", "value"), Input("comparison-group-selector", "value")]
+     Input("comparison-stack-selector", "value"), Input("comparison-group-selector", "value"),
+     Input("financial-analyst-toggle", "checked")]
 )
-def update_enhanced_comparison_content(selected_type, selected_dates, entity_filter, division_filter, filter_var, filter_values, stack_var, group_var):
+def update_enhanced_comparison_content(selected_type, selected_dates, entity_filter, division_filter, filter_var, filter_values, stack_var, group_var, enable_llm):
     if selected_type == "Total":
         amount_col, income_col = "Amount_total", "Income_total"
     elif selected_type == "Best":
@@ -1281,19 +1286,19 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
     comparison_text = generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old, income_new, date1, date2,
         filter_var, filter_values, group_var, df_date1, df_date2, selected_type, amount_col, income_col)
 
-    # ========== LLM FINANCIAL ANALYSIS PLACEHOLDER ==========
-    # Uncomment below to enable AI-powered financial analysis using Azure OpenAI gpt-4o
-    # The LLM analyzes the comparison_text and provides professional insights
-    # without hallucinating numbers (only uses data explicitly stated in comparison_text)
-    #
-    # from llm_financial_analyst import analyze_comparison_with_llm
-    #
-    # llm_analysis = analyze_comparison_with_llm(comparison_text)
-    #
-    # # Append LLM analysis to comparison text
-    # comparison_text = comparison_text + "\n\n" + "="*60 + "\n"
-    # comparison_text = comparison_text + "AI FINANCIAL ANALYSIS:\n" + "="*60 + "\n\n"
-    # comparison_text = comparison_text + llm_analysis
+    # ========== LLM FINANCIAL ANALYSIS ==========
+    # Enable/disable via the "AI Financial Analyst" toggle in the dashboard
+    if enable_llm:
+        try:
+            from llm_financial_analyst import analyze_comparison_with_llm
+            llm_analysis = analyze_comparison_with_llm(comparison_text)
+            comparison_text = comparison_text + "\n\n" + "="*60 + "\n"
+            comparison_text = comparison_text + "AI FINANCIAL ANALYSIS:\n" + "="*60 + "\n\n"
+            comparison_text = comparison_text + llm_analysis
+        except Exception as e:
+            comparison_text = comparison_text + "\n\n" + "="*60 + "\n"
+            comparison_text = comparison_text + f"AI FINANCIAL ANALYSIS:\n" + "="*60 + "\n\n"
+            comparison_text = comparison_text + f"Error: {str(e)}\n\nPlease ensure Azure OpenAI credentials are configured (AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_KEY environment variables)."
     # ========================================================
 
     value_boxes = dmc.SimpleGrid([
