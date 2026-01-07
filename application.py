@@ -527,8 +527,8 @@ def create_comparison_heatmap(df1, df2, variable, date1, date2, group_var, selec
     )
     return fig
 
-def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, selected_type, var_label):
-    """Create a dumbbell chart showing proportion changes (or heatmap if >5 groups)"""
+def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, selected_type, var_label, use_heatmap=False):
+    """Create a dumbbell chart showing proportion changes (or heatmap if toggle enabled)"""
     if group_var == "none":
         group_var = "Function"
 
@@ -566,8 +566,8 @@ def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, s
         fig.update_layout(title=f"{var_label} Proportions by {group_var} - {selected_type}", template="plotly_white", height=350)
         return fig
 
-    # If more than 5 groups, use heatmap instead
-    if len(all_groups) > 5:
+    # Use heatmap if toggle is enabled
+    if use_heatmap:
         return create_comparison_heatmap(df1, df2, variable, date1, date2, group_var, selected_type, var_label)
 
     fig = go.Figure()
@@ -684,11 +684,11 @@ app.layout = dmc.MantineProvider(
                                                 dmc.Select(id="events-date-selector", placeholder="Select date", data=[], value=None, size="sm",
                                                     searchable=True, clearable=True, leftSection=DashIconify(icon="material-symbols:calendar-month", width=20))]),
                                             dmc.GridCol(span=4, children=[dmc.Text("Division:", size="sm", fw=500, mb=5),
-                                                dmc.Select(id="events-division-selector", placeholder="Select division", value="All", size="sm",
-                                                    data=[{"value": "All", "label": "All"}] + [{"value": val, "label": val} for val in sorted(sample_data['Division'].unique()) if val != "All"])]),
+                                                dmc.Select(id="events-division-selector", placeholder="Select division", value=None, size="sm",
+                                                    data=[], searchable=True, clearable=True)]),
                                             dmc.GridCol(span=4, children=[dmc.Text("Metric:", size="sm", fw=500, mb=5),
-                                                dmc.Select(id="events-metric-selector", placeholder="Select metric", value="Amount", size="sm",
-                                                    data=[{"value": "Amount", "label": "Amount"}, {"value": "Income", "label": "Income"}, {"value": "Ratio", "label": "Ratio"}])]),
+                                                dmc.Select(id="events-metric-selector", placeholder="Select metric", value=None, size="sm",
+                                                    data=[], searchable=True, clearable=True)]),
                                         ], gutter="md", mb="md"),
                                         dmc.Stack([
                                             dmc.Switch(id="events-details-toggle", label="Include Additional Details", checked=False, size="sm"),
@@ -773,7 +773,9 @@ app.layout = dmc.MantineProvider(
                                     dmc.CardSection([dmc.Title("Comparison Notes", order=4, mb="md"),
                                         dmc.Group([
                                             dmc.Switch(id="financial-analyst-toggle", label="AI Financial Analyst", checked=False, size="sm",
-                                                description="Enable LLM-powered analysis (requires Azure OpenAI setup)")
+                                                description="Enable LLM-powered analysis (requires Azure OpenAI setup)"),
+                                            dmc.Switch(id="chart-type-toggle", label="Use Heatmap", checked=False, size="sm",
+                                                description="Toggle between Bubble Chart (off) and Heatmap (on)")
                                         ], mb="sm"),
                                         dmc.Textarea(id="comparison-textbox", placeholder="Enter your comparison analysis notes here...", autosize=True, minRows=8, maxRows=15,
                                             value="Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis\n• Monitor value changes and ratios\n• Identify significant trends between periods")],
@@ -1223,9 +1225,9 @@ def update_comparison_filter_values(filter_var):
      Input("comparison-entity-selector", "value"), Input("comparison-division-selector", "value"),
      Input("comparison-filter-selector", "value"), Input("comparison-filter-values-selector", "value"),
      Input("comparison-stack-selector", "value"), Input("comparison-group-selector", "value"),
-     Input("financial-analyst-toggle", "checked")]
+     Input("financial-analyst-toggle", "checked"), Input("chart-type-toggle", "checked")]
 )
-def update_enhanced_comparison_content(selected_type, selected_dates, entity_filter, division_filter, filter_var, filter_values, stack_var, group_var, enable_llm):
+def update_enhanced_comparison_content(selected_type, selected_dates, entity_filter, division_filter, filter_var, filter_values, stack_var, group_var, enable_llm, use_heatmap):
     if selected_type == "Total":
         amount_col, income_col = "Amount_total", "Income_total"
     elif selected_type == "Best":
@@ -1379,20 +1381,42 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
         return fig
     
     def create_division_stacked_chart(df1, df2, variable, var_label):
+        # If division filter is set to "All", use dataset filtered to exclude "All" divisions
+        if division_filter == "All":
+            # Create fresh filtered datasets excluding Division == "All"
+            df_temp1 = df[(df['date'].dt.to_period('M') == date1.to_period('M'))]
+            df_temp2 = df[(df['date'].dt.to_period('M') == date2.to_period('M'))]
+
+            # Apply Entity filter
+            if entity_filter != "All":
+                df_temp1 = df_temp1[df_temp1['Entity'] == entity_filter]
+                df_temp2 = df_temp2[df_temp2['Entity'] == entity_filter]
+
+            # Filter to exclude "All" divisions
+            df_temp1 = df_temp1[df_temp1['Division'] != "All"]
+            df_temp2 = df_temp2[df_temp2['Division'] != "All"]
+
+            # Apply other filters
+            if filter_var != "none" and filter_var in df.columns and filter_values:
+                df_temp1 = df_temp1[df_temp1[filter_var].isin(filter_values)]
+                df_temp2 = df_temp2[df_temp2[filter_var].isin(filter_values)]
+
+            df1, df2 = df_temp1, df_temp2
+
         if 'Division' not in df1.columns or 'Division' not in df2.columns:
             fig = go.Figure()
             fig.add_annotation(text="Division data not available", xref="paper", yref="paper",
                 x=0.5, y=0.5, xanchor='center', yanchor='middle', showarrow=False)
             fig.update_layout(title=f"{var_label} by Division", template="plotly_white", height=350)
             return fig
-        
+
         fig = go.Figure()
         date_labels = [date1.strftime('%Y-%m'), date2.strftime('%Y-%m')]
-        
+
         div1 = df1.groupby('Division')[variable].sum()
         total1 = div1.sum()
         pct1 = (div1 / total1 * 100) if total1 > 0 else pd.Series(dtype=float)
-        
+
         div2 = df2.groupby('Division')[variable].sum()
         total2 = div2.sum()
         pct2 = (div2 / total2 * 100) if total2 > 0 else pd.Series(dtype=float)
@@ -1596,8 +1620,8 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
     
     amount_chart = create_comparison_chart(df_date1, df_date2, amount_col, "Amount")
     income_chart = create_comparison_chart(df_date1, df_date2, income_col, "Income")
-    amount_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, amount_col, date1, date2, group_var, selected_type, "Amount")
-    income_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, income_col, date1, date2, group_var, selected_type, "Income")
+    amount_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, amount_col, date1, date2, group_var, selected_type, "Amount", use_heatmap)
+    income_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, income_col, date1, date2, group_var, selected_type, "Income", use_heatmap)
     amount_division = create_division_stacked_chart(df_date1, df_date2, amount_col, "Amount")
     income_division = create_division_stacked_chart(df_date1, df_date2, income_col, "Income")
     
@@ -1983,12 +2007,28 @@ def export_tool_data(n_clicks, division_filter, item_filter, function_filter, ye
         return dcc.send_bytes(output.getvalue(), f"tool_data_{datetime.now().strftime('%Y%m%d')}.xlsx")
 
 
-@callback(Output("events-date-selector", "data"), Input("main-tabs", "value"))
-def populate_events_dates(active_tab):
-    if active_tab == "history":
-        dates = sorted(sample_data['date'].dt.to_period('M').astype(str).unique(), reverse=True)
-        return [{"value": date, "label": date} for date in dates]
-    return []
+@callback(
+    [Output("events-date-selector", "data"),
+     Output("events-division-selector", "data"),
+     Output("events-metric-selector", "data")],
+    Input("main-tabs", "value")
+)
+def populate_events_filters(active_tab):
+    if active_tab == "history" and not events_data.empty:
+        # Get unique dates from events_data
+        dates = sorted(events_data['Date'].dt.to_period('M').astype(str).unique(), reverse=True)
+        date_options = [{"value": date, "label": date} for date in dates]
+
+        # Get unique divisions from events_data
+        divisions = sorted(events_data['Division'].unique()) if 'Division' in events_data.columns else []
+        division_options = [{"value": div, "label": div} for div in divisions]
+
+        # Get unique metrics from events_data
+        metrics = sorted(events_data['Metric'].unique()) if 'Metric' in events_data.columns else []
+        metric_options = [{"value": metric, "label": metric} for metric in metrics]
+
+        return date_options, division_options, metric_options
+    return [], [], []
 
 @callback(
     Output("events-textbox", "value"),

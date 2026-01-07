@@ -8,19 +8,18 @@ and provides professional financial insights without hallucinating numbers.
 
 from openai import AzureOpenAI
 import os
-from typing import Optional
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
 
 class FinancialAnalystLLM:
     """
     Financial analyst using Azure OpenAI gpt-4o to interpret comparison text.
     Designed to avoid hallucinating numbers by only using provided data.
+    Uses Azure AD authentication via azure_ad_token_provider.
     """
 
     def __init__(
         self,
-        azure_endpoint: Optional[str] = None,
-        api_key: Optional[str] = None,
         api_version: str = "2024-02-15-preview",
         deployment_name: str = "gpt-4o"
     ):
@@ -28,25 +27,29 @@ class FinancialAnalystLLM:
         Initialize the Financial Analyst LLM.
 
         Args:
-            azure_endpoint: Azure OpenAI endpoint URL (from env var AZURE_OPENAI_ENDPOINT if not provided)
-            api_key: Azure OpenAI API key (from env var AZURE_OPENAI_KEY if not provided)
             api_version: API version to use
             deployment_name: Name of the deployed model (default: gpt-4o)
+
+        Note: Uses Azure AD authentication. Requires AZURE_OPENAI_ENDPOINT environment variable.
         """
-        self.azure_endpoint = azure_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT")
-        self.api_key = api_key or os.getenv("AZURE_OPENAI_KEY")
+        self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         self.api_version = api_version
         self.deployment_name = deployment_name
 
-        if not self.azure_endpoint or not self.api_key:
+        if not self.azure_endpoint:
             raise ValueError(
-                "Azure OpenAI endpoint and API key must be provided either as parameters "
-                "or via AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_KEY environment variables"
+                "Azure OpenAI endpoint must be provided via AZURE_OPENAI_ENDPOINT environment variable"
             )
+
+        # Use Azure AD token provider instead of API key
+        token_provider = get_bearer_token_provider(
+            DefaultAzureCredential(),
+            "https://cognitiveservices.azure.com/.default"
+        )
 
         self.client = AzureOpenAI(
             azure_endpoint=self.azure_endpoint,
-            api_key=self.api_key,
+            azure_ad_token_provider=token_provider,
             api_version=self.api_version
         )
 
@@ -99,8 +102,10 @@ Please provide:
 IMPORTANT: Only reference numbers and facts from the comparison text above. Do not calculate or infer additional metrics."""
 
         try:
+            # For Azure OpenAI, the deployment name is passed via the endpoint configuration
+            # The model parameter should match your Azure deployment name
             response = self.client.chat.completions.create(
-                model=self.deployment_name,
+                model=self.deployment_name,  # This is your Azure deployment name (e.g., "gpt-4o")
                 messages=[
                     {
                         "role": "system",
