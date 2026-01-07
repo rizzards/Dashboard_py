@@ -759,6 +759,10 @@ app.layout = dmc.MantineProvider(
                                                     data=[{"value": "none", "label": "No Grouping"}, {"value": "Type", "label": "Type"},
                                                         {"value": "Item", "label": "Item"}, {"value": "Function", "label": "Function"}])]),
                                         ], gutter="md", mb="md"),
+                                        dmc.Group([
+                                            dmc.Switch(id="chart-type-toggle", label="Use Heatmap", checked=False, size="sm",
+                                                description="Toggle between Bubble Chart (off) and Heatmap (on)")
+                                        ], mb="md"),
                                         dmc.Grid([
                                             dmc.GridCol(span=6, children=[dmc.Text("Filter by:", size="sm", fw=500, mb=5),
                                                 dmc.Select(id="comparison-filter-selector", placeholder="Select filter", value="none", size="sm",
@@ -773,9 +777,7 @@ app.layout = dmc.MantineProvider(
                                     dmc.CardSection([dmc.Title("Comparison Notes", order=4, mb="md"),
                                         dmc.Group([
                                             dmc.Switch(id="financial-analyst-toggle", label="AI Financial Analyst", checked=False, size="sm",
-                                                description="Enable LLM-powered analysis (requires Azure OpenAI setup)"),
-                                            dmc.Switch(id="chart-type-toggle", label="Use Heatmap", checked=False, size="sm",
-                                                description="Toggle between Bubble Chart (off) and Heatmap (on)")
+                                                description="Enable LLM-powered analysis (requires Azure OpenAI setup)")
                                         ], mb="sm"),
                                         dmc.Textarea(id="comparison-textbox", placeholder="Enter your comparison analysis notes here...", autosize=True, minRows=8, maxRows=15,
                                             value="Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis\n• Monitor value changes and ratios\n• Identify significant trends between periods")],
