@@ -38,7 +38,7 @@ app.layout = create_app_layout()
 # Run the application
 if __name__ == '__main__':
     from config import APP_CONFIG
-    app.run_server(
+    app.run(
         debug=APP_CONFIG['debug'],
         host=APP_CONFIG['host'],
         port=APP_CONFIG['port']

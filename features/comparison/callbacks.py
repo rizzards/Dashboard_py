@@ -18,6 +18,7 @@ from shared.formatters import format_number
 from features.comparison.logic import generate_enhanced_comparison_text_updated
 from features.comparison.charts import (
     create_dumbbell_chart_updated,
+    create_comparison_heatmap,
     create_division_stacked_chart,
     create_type2_breakdown_charts,
     create_comparison_chart,
@@ -72,13 +73,15 @@ def update_comparison_filter_values(filter_var):
     [Output("comparison-value-boxes", "children"),
      Output("comparison-var1-chart", "figure"),
      Output("comparison-var2-chart", "figure"),
+     Output("ratio-comparison-chart", "figure"),
+     Output("amount-heatmap-chart", "figure"),
+     Output("income-heatmap-chart", "figure"),
      Output("var1-dumbbell-chart", "figure"),
      Output("var2-dumbbell-chart", "figure"),
      Output("amount-division-chart", "figure"),
      Output("income-division-chart", "figure"),
      Output("type2-amount-chart", "figure"),
      Output("type2-income-chart", "figure"),
-     Output("ratio-comparison-chart", "figure"),
      Output("comparison-textbox", "value")],
     [Input("comparison-type-selector", "value"),
      Input("comparison-date-selector", "value"),
@@ -88,11 +91,10 @@ def update_comparison_filter_values(filter_var):
      Input("comparison-filter-values-selector", "value"),
      Input("comparison-stack-selector", "value"),
      Input("comparison-group-selector", "value"),
-     Input("financial-analyst-toggle", "checked"),
-     Input("chart-type-toggle", "checked")]
+     Input("financial-analyst-toggle", "checked")]
 )
 def update_enhanced_comparison_content(selected_type, selected_dates, entity_filter, division_filter,
-                                     filter_var, filter_values, stack_var, group_var, enable_llm, use_heatmap):
+                                     filter_var, filter_values, stack_var, group_var, enable_llm):
     """
     Main callback to update all comparison content
 
@@ -106,7 +108,6 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
         stack_var: Variable to stack by
         group_var: Variable to group by
         enable_llm: Whether to enable LLM analysis
-        use_heatmap: Whether to use heatmap instead of bubble chart
 
     Returns:
         tuple: All comparison outputs (value boxes, charts, comparison text)
@@ -130,7 +131,8 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
     if not selected_dates or len(selected_dates) != 2:
         empty_boxes = dmc.Center([dmc.Text("Please select exactly 2 dates to see comparison metrics", c="dimmed", size="sm")], style={"padding": "20px"})
         default_text = "Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis"
-        return empty_boxes, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, default_text
+        return (empty_boxes, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig,
+                empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, default_text)
 
     date1, date2 = sorted([pd.to_datetime(date + '-01') for date in selected_dates])
     df = sample_data.copy()
@@ -205,8 +207,10 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
 
     amount_chart = create_comparison_chart(df_date1, df_date2, amount_col, "Amount", date1, date2, selected_type, group_var, stack_var, df)
     income_chart = create_comparison_chart(df_date1, df_date2, income_col, "Income", date1, date2, selected_type, group_var, stack_var, df)
-    amount_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, amount_col, date1, date2, group_var, selected_type, "Amount", use_heatmap)
-    income_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, income_col, date1, date2, group_var, selected_type, "Income", use_heatmap)
+    amount_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, amount_col, date1, date2, group_var, selected_type, "Amount")
+    income_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, income_col, date1, date2, group_var, selected_type, "Income")
+    amount_heatmap = create_comparison_heatmap(df_date1, df_date2, amount_col, date1, date2, group_var, selected_type, "Amount")
+    income_heatmap = create_comparison_heatmap(df_date1, df_date2, income_col, date1, date2, group_var, selected_type, "Income")
     amount_division = create_division_stacked_chart(df_date1, df_date2, amount_col, "Amount", date1, date2, selected_type, division_filter, entity_filter, filter_var, filter_values, df)
     income_division = create_division_stacked_chart(df_date1, df_date2, income_col, "Income", date1, date2, selected_type, division_filter, entity_filter, filter_var, filter_values, df)
 
@@ -247,7 +251,9 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
 
     comparison_text = comparison_text + "".join(ratio_text_parts)
 
-    return value_boxes, amount_chart, income_chart, amount_dumbbell, income_dumbbell, amount_division, income_division, type2_amount_chart, type2_income_chart, ratio_comparison_fig, comparison_text
+    return (value_boxes, amount_chart, income_chart, ratio_comparison_fig,
+            amount_heatmap, income_heatmap, amount_dumbbell, income_dumbbell,
+            amount_division, income_division, type2_amount_chart, type2_income_chart, comparison_text)
 
 
 @callback(
@@ -374,15 +380,18 @@ def export_comparison_excel(n_clicks, selected_type, selected_dates, entity_filt
     Input("comparison-png-btn", "n_clicks"),
     [State("comparison-var1-chart", "figure"),
      State("comparison-var2-chart", "figure"),
+     State("ratio-comparison-chart", "figure"),
+     State("amount-heatmap-chart", "figure"),
+     State("income-heatmap-chart", "figure"),
      State("var1-dumbbell-chart", "figure"),
      State("var2-dumbbell-chart", "figure"),
      State("amount-division-chart", "figure"),
      State("income-division-chart", "figure"),
-     State("ratio-comparison-chart", "figure"),
      State("comparison-type-selector", "value")],
     prevent_initial_call=True
 )
-def export_comparison_png(n_clicks, var1_fig, var2_fig, dump1_fig, dump2_fig, amt_div_fig, inc_div_fig, ratio_fig, selected_type):
+def export_comparison_png(n_clicks, var1_fig, var2_fig, ratio_fig, amt_heat_fig, inc_heat_fig,
+                         dump1_fig, dump2_fig, amt_div_fig, inc_div_fig, selected_type):
     """
     Export all Comparison tab charts as PNG files in a ZIP
 
@@ -390,11 +399,13 @@ def export_comparison_png(n_clicks, var1_fig, var2_fig, dump1_fig, dump2_fig, am
         n_clicks: Number of times button clicked
         var1_fig: Amount comparison chart figure
         var2_fig: Income comparison chart figure
+        ratio_fig: Ratio comparison chart figure
+        amt_heat_fig: Amount heatmap chart figure
+        inc_heat_fig: Income heatmap chart figure
         dump1_fig: Amount dumbbell chart figure
         dump2_fig: Income dumbbell chart figure
         amt_div_fig: Amount division chart figure
         inc_div_fig: Income division chart figure
-        ratio_fig: Ratio comparison chart figure
         selected_type: Type of data (Total, Best, Type1, Type2, Type3)
 
     Returns:
@@ -406,11 +417,13 @@ def export_comparison_png(n_clicks, var1_fig, var2_fig, dump1_fig, dump2_fig, am
             charts = [
                 (var1_fig, 'amount_comparison'),
                 (var2_fig, 'income_comparison'),
+                (ratio_fig, 'ratio_comparison'),
+                (amt_heat_fig, 'amount_heatmap'),
+                (inc_heat_fig, 'income_heatmap'),
                 (dump1_fig, 'amount_proportions'),
                 (dump2_fig, 'income_proportions'),
                 (amt_div_fig, 'amount_by_division'),
-                (inc_div_fig, 'income_by_division'),
-                (ratio_fig, 'ratio_comparison')
+                (inc_div_fig, 'income_by_division')
             ]
             for fig_data, name in charts:
                 fig = go.Figure(fig_data)

@@ -94,9 +94,9 @@ def create_comparison_heatmap(df1, df2, variable, date1, date2, group_var, selec
     return fig
 
 
-def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, selected_type, var_label, use_heatmap=False):
+def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, selected_type, var_label):
     """
-    Create a dumbbell chart showing proportion changes (or heatmap if toggle enabled)
+    Create a dumbbell chart showing proportion changes between two dates
 
     Args:
         df1: DataFrame for first date
@@ -107,10 +107,9 @@ def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, s
         group_var: Variable to group by ('Division', 'Type', 'Item', 'Function')
         selected_type: Type of data (Total, Best, Type1, Type2, Type3)
         var_label: Label for the variable (e.g., "Amount", "Income")
-        use_heatmap: If True, return heatmap instead of dumbbell chart
 
     Returns:
-        plotly.graph_objects.Figure: Dumbbell chart or heatmap
+        plotly.graph_objects.Figure: Dumbbell chart
     """
     if group_var == "none":
         group_var = "Function"
@@ -148,10 +147,6 @@ def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, s
             xanchor='center', yanchor='middle', showarrow=False, font=dict(size=14, color="gray"))
         fig.update_layout(title=f"{var_label} Proportions by {group_var} - {selected_type}", template="plotly_white", height=350)
         return fig
-
-    # Use heatmap if toggle is enabled
-    if use_heatmap:
-        return create_comparison_heatmap(df1, df2, variable, date1, date2, group_var, selected_type, var_label)
 
     fig = go.Figure()
     for i, group in enumerate(sorted(all_groups)):

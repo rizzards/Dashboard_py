@@ -2,7 +2,7 @@
 Layout components for the Scenario feature
 Defines the UI structure for scenario analysis tabs (Scenario Weight and Prediction)
 """
-from dash import dcc, html
+from dash import dcc
 import dash_mantine_components as dmc
 from dash_iconify import DashIconify
 
@@ -15,10 +15,9 @@ def create_scenario_layout():
     Create the complete layout for the Scenario section with tabs.
 
     Returns:
-        html.Div component containing the scenario tabs UI
+        dmc.Tabs component containing the scenario tabs UI
     """
-    return html.Div(id="scenario-content", style={"display": "none"}, children=[
-        dmc.Tabs(value="scenario_probability", id="scenario-tabs", children=[
+    return dmc.Tabs(value="scenario_probability", id="scenario-tabs", children=[
             # Tab List
             dmc.TabsList([
                 dmc.TabsTab("Scenario Probability", value="scenario_probability"),
@@ -176,4 +175,3 @@ def create_scenario_layout():
                 ], gap="md")
             ]),
         ])
-    ])

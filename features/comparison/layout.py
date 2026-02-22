@@ -122,17 +122,6 @@ def create_comparison_layout():
                     ]),
                 ], gutter="md", mb="md"),
 
-                # Chart Type Toggle
-                dmc.Group([
-                    dmc.Switch(
-                        id="chart-type-toggle",
-                        label="Use Heatmap",
-                        checked=False,
-                        size="sm",
-                        description="Toggle between Bubble Chart (off) and Heatmap (on)"
-                    )
-                ], mb="md"),
-
                 # Additional Filters
                 dmc.Grid([
                     dmc.GridCol(span=6, children=[
@@ -224,6 +213,21 @@ def create_comparison_layout():
             dmc.CardSection([
                 dmc.Title("Return Ratio (Income/Amount) Comparison", order=6, mb="sm"),
                 dcc.Graph(id="ratio-comparison-chart", style={"height": "400px"})
+            ], inheritPadding=True, pt="xs"),
+
+            # Heatmap Comparison
+            dmc.CardSection([
+                dmc.Title("Heatmap Comparison", order=6, mb="sm"),
+                dmc.Grid([
+                    dmc.GridCol([
+                        dmc.Title("Amount Heatmap", order=6, mb="sm"),
+                        dcc.Graph(id="amount-heatmap-chart", style={"height": "350px"})
+                    ], span=6),
+                    dmc.GridCol([
+                        dmc.Title("Income Heatmap", order=6, mb="sm"),
+                        dcc.Graph(id="income-heatmap-chart", style={"height": "350px"})
+                    ], span=6),
+                ], gutter="md")
             ], inheritPadding=True, pt="xs"),
 
             # Proportion Changes Analysis

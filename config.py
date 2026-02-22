@@ -10,7 +10,7 @@ import os
 APP_CONFIG = {
     'debug': True,
     'port': 8050,
-    'host': '127.0.0.1',
+    'host': '0.0.0.0',
     'title': 'Financial Dashboard - Dashboard_py'
 }
 

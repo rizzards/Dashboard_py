@@ -123,16 +123,17 @@ def create_app_layout():
 
 
 # Callback for navigation toggle (kept here since it's navigation-specific)
-from dash import callback, Input, Output
+from dash import callback, Input, Output, ctx
 
 @callback(
     [Output("today-content", "style"), Output("scenario-content", "style"),
      Output("nav-today", "active"), Output("nav-scenario", "active")],
-    [Input("nav-today", "n_clicks"), Input("nav-scenario", "n_clicks")]
+    [Input("nav-today", "n_clicks"), Input("nav-scenario", "n_clicks")],
+    prevent_initial_call=True
 )
 def toggle_navigation(today_clicks, scenario_clicks):
     """
-    Toggle between Today and Scenario views.
+    Toggle between Today and Scenario views based on which nav item was clicked.
 
     Args:
         today_clicks: Number of clicks on Today nav item
@@ -141,6 +142,7 @@ def toggle_navigation(today_clicks, scenario_clicks):
     Returns:
         tuple: Display styles and active states for both sections
     """
-    if scenario_clicks and scenario_clicks > 0:
+    triggered = ctx.triggered_id
+    if triggered == "nav-scenario":
         return {"display": "none"}, {"display": "block"}, False, True
     return {"display": "block"}, {"display": "none"}, True, False
