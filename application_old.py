@@ -61,7 +61,7 @@ app = dash.Dash(__name__)
 # DATA LOADING
 # ============================================================================
 try:
-    sample_data = pd.read_csv('Example_df.csv')
+    sample_data = pd.read_csv('data/Example_df.csv')
     sample_data['Date'] = pd.to_datetime(sample_data['Date'], format='%Y-%m')
     sample_data = sample_data.rename(columns={'Date': 'date'})
     # Multiply all numerical columns by 1,000,000
@@ -70,7 +70,7 @@ try:
     sample_data = sample_data.sort_values('date').reset_index(drop=True)
     print(f"Successfully loaded {len(sample_data)} records from Example_df.csv")
 
-    tool_sample = pd.read_csv('Example_correction.csv')
+    tool_sample = pd.read_csv('data/Example_correction.csv')
     tool_sample['Date'] = pd.to_datetime(tool_sample['Date'], format='%Y-%m')
     tool_sample = tool_sample.rename(columns={'Date': 'date'})
     # Multiply all numerical columns by 1,000,000
@@ -79,13 +79,13 @@ try:
     tool_sample = tool_sample.sort_values('date').reset_index(drop=True)
     print(f"Successfully loaded {len(tool_sample)} records from Example_correction.csv")
 
-    scenw_sample = pd.read_csv('Example_scenw.csv')
+    scenw_sample = pd.read_csv('data/Example_scenw.csv')
     scenw_sample['Date'] = pd.to_datetime(scenw_sample['Date'], format='%Y-%m')
     scenw_sample = scenw_sample.rename(columns={'Date': 'date', 'Name': 'ScenName'})
     scenw_sample = scenw_sample.sort_values('date').reset_index(drop=True)
     print(f"Successfully loaded {len(scenw_sample)} records from Example_scenw.csv")
 
-    type_sample = pd.read_csv('Type_detail.csv')
+    type_sample = pd.read_csv('data/Type_detail.csv')
     type_sample['Date'] = pd.to_datetime(type_sample['Date'], format='%Y-%m')
     type_sample = type_sample.rename(columns={'Date': 'date'})
     # Multiply all numerical columns by 1,000,000
@@ -96,7 +96,7 @@ try:
 
     # Load Events data
     try:
-        events_data = pd.read_excel('Events.xlsx')
+        events_data = pd.read_excel('data/Events.xlsx')
         events_data['Date'] = pd.to_datetime(events_data['Date'], format='%Y-%m')
         events_data = events_data.sort_values('Date').reset_index(drop=True)
         print(f"Successfully loaded {len(events_data)} records from Events.xlsx")
@@ -1294,7 +1294,7 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
     # Enable/disable via the "AI Financial Analyst" toggle in the dashboard
     if enable_llm:
         try:
-            from llm_financial_analyst import analyze_comparison_with_llm
+            from features.comparison import analyze_comparison_with_llm
             llm_analysis = analyze_comparison_with_llm(comparison_text)
             comparison_text = comparison_text + "\n\n" + "="*60 + "\n"
             comparison_text = comparison_text + "AI FINANCIAL ANALYSIS:\n" + "="*60 + "\n\n"

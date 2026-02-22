@@ -1,1 +1,6 @@
 CLAUDE.md
+*.md
+!README.md
+verify_migration.py
+*.txt
+!requirements.txt

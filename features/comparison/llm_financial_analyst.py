@@ -144,8 +144,8 @@ class FinancialAnalystLLM:
     def analyze_comparison_text(
         self,
         comparison_text: str,
-        max_tokens: int = 1000,
-        temperature: float = 0.3
+        max_tokens: int = 10000,
+        temperature: float = 0.15
     ) -> str:
         """
         Analyze the comparison text and provide financial insights.
