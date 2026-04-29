@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36">
+  <!-- Three rising bars -->
+  <rect x="2"  y="24" width="8" height="10" rx="1.5" fill="#4A90D9"/>
+  <rect x="14" y="16" width="8" height="18" rx="1.5" fill="#2B6CB0"/>
+  <rect x="26" y="6"  width="8" height="28" rx="1.5" fill="#1A4F8A"/>
+  <!-- Trend line with endpoint dot -->
+  <polyline points="6,22 18,14 30,4" fill="none" stroke="#63B3ED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="30" cy="4" r="2.5" fill="#63B3ED"/>
+</svg>

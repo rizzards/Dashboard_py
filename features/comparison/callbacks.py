@@ -7,7 +7,6 @@ import io
 import zipfile
 from datetime import datetime
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 import dash_mantine_components as dmc
 from dash import callback, Input, Output, State, dcc
@@ -25,6 +24,30 @@ from features.comparison.charts import (
     create_ratio_comparison_chart
 )
 from features.comparison.llm_financial_analyst import analyze_comparison_with_llm
+
+
+# Entity → Division valid combinations (derived from data)
+ENTITY_DIVISION_MAP = {
+    "All": ["All"],
+    "EU":  ["All", "France", "Stockholm"],
+}
+
+
+@callback(
+    Output("comparison-division-selector", "data"),
+    Output("comparison-division-selector", "value"),
+    Input("comparison-entity-selector", "value"),
+    State("comparison-division-selector", "value"),
+)
+def constrain_division_by_entity(entity, current_division):
+    """
+    Restrict Division options to those valid for the selected Entity.
+    If the current Division is no longer valid, reset it to 'All'.
+    """
+    allowed = ENTITY_DIVISION_MAP.get(entity, ["All"])
+    options = [{"value": d, "label": d} for d in allowed]
+    new_value = current_division if current_division in allowed else "All"
+    return options, new_value
 
 
 @callback(Output("comparison-date-selector", "data"), Input("main-tabs", "value"))
@@ -82,7 +105,7 @@ def update_comparison_filter_values(filter_var):
      Output("income-division-chart", "figure"),
      Output("type2-amount-chart", "figure"),
      Output("type2-income-chart", "figure"),
-     Output("comparison-textbox", "value")],
+     Output("comparison-analysis-store", "data")],
     [Input("comparison-type-selector", "value"),
      Input("comparison-date-selector", "value"),
      Input("comparison-entity-selector", "value"),
@@ -90,11 +113,10 @@ def update_comparison_filter_values(filter_var):
      Input("comparison-filter-selector", "value"),
      Input("comparison-filter-values-selector", "value"),
      Input("comparison-stack-selector", "value"),
-     Input("comparison-group-selector", "value"),
-     Input("financial-analyst-toggle", "checked")]
+     Input("comparison-group-selector", "value")]
 )
 def update_enhanced_comparison_content(selected_type, selected_dates, entity_filter, division_filter,
-                                     filter_var, filter_values, stack_var, group_var, enable_llm):
+                                     filter_var, filter_values, stack_var, group_var):
     """
     Main callback to update all comparison content
 
@@ -130,9 +152,8 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
 
     if not selected_dates or len(selected_dates) != 2:
         empty_boxes = dmc.Center([dmc.Text("Please select exactly 2 dates to see comparison metrics", c="dimmed", size="sm")], style={"padding": "20px"})
-        default_text = "Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis"
         return (empty_boxes, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig,
-                empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, default_text)
+                empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, None)
 
     date1, date2 = sorted([pd.to_datetime(date + '-01') for date in selected_dates])
     df = sample_data.copy()
@@ -173,20 +194,6 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
     comparison_text = generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old, income_new, date1, date2,
         filter_var, filter_values, group_var, df_date1, df_date2, selected_type, amount_col, income_col)
 
-    # ========== LLM FINANCIAL ANALYSIS ==========
-    # Enable/disable via the "AI Financial Analyst" toggle in the dashboard
-    if enable_llm:
-        try:
-            llm_analysis = analyze_comparison_with_llm(comparison_text)
-            comparison_text = comparison_text + "\n\n" + "="*60 + "\n"
-            comparison_text = comparison_text + "AI FINANCIAL ANALYSIS:\n" + "="*60 + "\n\n"
-            comparison_text = comparison_text + llm_analysis
-        except Exception as e:
-            comparison_text = comparison_text + "\n\n" + "="*60 + "\n"
-            comparison_text = comparison_text + f"AI FINANCIAL ANALYSIS:\n" + "="*60 + "\n\n"
-            comparison_text = comparison_text + f"Error: {str(e)}\n\nPlease ensure Azure OpenAI credentials are configured (AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_KEY environment variables)."
-    # ========================================================
-
     value_boxes = dmc.SimpleGrid([
         dmc.Card([dmc.Stack([dmc.Text(f"Amount Change - {selected_type}", size="sm", c="dimmed"),
             dmc.Group([dmc.Text(f"{amount_change:+.1f}%", size="xl", fw=700, c="green" if amount_change >= 0 else "red"),
@@ -211,49 +218,70 @@ def update_enhanced_comparison_content(selected_type, selected_dates, entity_fil
     income_dumbbell = create_dumbbell_chart_updated(df_date1, df_date2, income_col, date1, date2, group_var, selected_type, "Income")
     amount_heatmap = create_comparison_heatmap(df_date1, df_date2, amount_col, date1, date2, group_var, selected_type, "Amount")
     income_heatmap = create_comparison_heatmap(df_date1, df_date2, income_col, date1, date2, group_var, selected_type, "Income")
-    amount_division = create_division_stacked_chart(df_date1, df_date2, amount_col, "Amount", date1, date2, selected_type, division_filter, entity_filter, filter_var, filter_values, df)
-    income_division = create_division_stacked_chart(df_date1, df_date2, income_col, "Income", date1, date2, selected_type, division_filter, entity_filter, filter_var, filter_values, df)
+    amount_division = create_division_stacked_chart(df_date1, df_date2, amount_col, "Amount", date1, date2, selected_type, division_filter, entity_filter, filter_var, filter_values, df, group_var)
+    income_division = create_division_stacked_chart(df_date1, df_date2, income_col, "Income", date1, date2, selected_type, division_filter, entity_filter, filter_var, filter_values, df, group_var)
 
-    # Create Type2 breakdown charts (WW, DP, PP)
-    type2_amount_chart, type2_income_chart = create_type2_breakdown_charts(date1, date2, filter_var, filter_values, group_var, selected_type)
-
-    # Create ratio comparison chart
-    ratio_comparison_fig = create_ratio_comparison_chart(df_date1, df_date2, amount_col, income_col, date1, date2, selected_type, group_var, amount_old, amount_new, income_old, income_new)
-
-    # Add ratio analysis to comparison text
-    ratio_text_parts = []
-    if group_var != "none" and group_var in ['Type', 'Item', 'Function']:
-        groups_date1 = df_date1.groupby(group_var).agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
-        groups_date2 = df_date2.groupby(group_var).agg({amount_col: 'sum', income_col: 'sum'}).reset_index()
-
-        groups_date1['ratio'] = (groups_date1[income_col] / groups_date1[amount_col].replace(0, np.nan)) * 100
-        groups_date2['ratio'] = (groups_date2[income_col] / groups_date2[amount_col].replace(0, np.nan)) * 100
-
-        all_groups = sorted(set(groups_date1[group_var].tolist() + groups_date2[group_var].tolist()))
-
-        ratio_data_date1 = groups_date1.set_index(group_var)['ratio'].reindex(all_groups, fill_value=0)
-        ratio_data_date2 = groups_date2.set_index(group_var)['ratio'].reindex(all_groups, fill_value=0)
-
-        ratio_text_parts.append("\n\nRETURN RATIO ANALYSIS:\n" + "=" * 30 + "\n")
-        for group in all_groups:
-            r1 = ratio_data_date1.get(group, 0)
-            r2 = ratio_data_date2.get(group, 0)
-            change = r2 - r1
-            direction = "improved" if change > 0 else "declined" if change < 0 else "remained stable"
-            ratio_text_parts.append(f"• {group}: {r1:.2f}% → {r2:.2f}% ({direction}, {change:+.2f}pp)\n")
+    # Type2 breakdown (WW/DP/PP) — type_sample only has Division and Function
+    if group_var in ['Type', 'Item']:
+        _unavailable = go.Figure()
+        _unavailable.add_annotation(
+            text="Type 2 Breakdown is available with grouping by Division or Function only.",
+            xref="paper", yref="paper", x=0.5, y=0.5,
+            xanchor='center', yanchor='middle', showarrow=False,
+            font=dict(size=13, color="gray")
+        )
+        _unavailable.update_layout(template="plotly_white", height=350)
+        type2_amount_chart = type2_income_chart = _unavailable
     else:
-        ratio_old = (income_old / amount_old * 100) if amount_old != 0 else 0
-        ratio_new = (income_new / amount_new * 100) if amount_new != 0 else 0
-        change = ratio_new - ratio_old
-        direction = "improved" if change > 0 else "declined" if change < 0 else "remained stable"
-        ratio_text_parts.append(f"\n\nRETURN RATIO ANALYSIS:\n" + "=" * 30 + "\n")
-        ratio_text_parts.append(f"• Overall ratio {direction}: {ratio_old:.2f}% → {ratio_new:.2f}% ({change:+.2f}pp)\n")
+        type2_amount_chart, type2_income_chart = create_type2_breakdown_charts(date1, date2, filter_var, filter_values, group_var, selected_type)
 
-    comparison_text = comparison_text + "".join(ratio_text_parts)
+    # Return Ratio — not meaningful when stack variable is Type or Item
+    if stack_var in ['Type', 'Item']:
+        ratio_comparison_fig = go.Figure()
+        ratio_comparison_fig.add_annotation(
+            text="Return Ratio chart is not available when stacking by Type or Item.",
+            xref="paper", yref="paper", x=0.5, y=0.5,
+            xanchor='center', yanchor='middle', showarrow=False,
+            font=dict(size=13, color="gray")
+        )
+        ratio_comparison_fig.update_layout(template="plotly_white", height=400)
+    else:
+        ratio_comparison_fig = create_ratio_comparison_chart(df_date1, df_date2, amount_col, income_col, date1, date2, selected_type, group_var, amount_old, amount_new, income_old, income_new)
 
     return (value_boxes, amount_chart, income_chart, ratio_comparison_fig,
             amount_heatmap, income_heatmap, amount_dumbbell, income_dumbbell,
             amount_division, income_division, type2_amount_chart, type2_income_chart, comparison_text)
+
+
+@callback(
+    Output("comparison-textbox", "value"),
+    Output("llm-status-text", "children"),
+    Input("comparison-analysis-store", "data"),
+    Input("financial-analyst-toggle", "checked"),
+)
+def update_comparison_textbox_with_llm(base_text, enable_llm):
+    """
+    Dedicated callback that owns the comparison textbox.
+    Fires when base text changes (new dates/filters) or the LLM toggle is flipped.
+    Shows a dcc.Loading spinner while the LLM is running.
+    """
+    _default = ("Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n"
+                "• Use filters and grouping to focus analysis", "")
+
+    if not base_text:
+        return _default
+
+    if not enable_llm:
+        return base_text, ""
+
+    # Toggle is ON — LLM analysis replaces the textbox entirely
+    try:
+        llm_analysis = analyze_comparison_with_llm(base_text)
+        return llm_analysis, "AI analysis complete."
+    except Exception as e:
+        return (f"AI FINANCIAL ANALYSIS — ERROR:\n{'=' * 60}\n\n"
+                f"{str(e)}\n\n"
+                f"Ensure AZURE_OPENAI_ENDPOINT is set in the environment."), f"Error: {str(e)}"
 
 
 @callback(
@@ -436,19 +464,31 @@ def export_comparison_png(n_clicks, var1_fig, var2_fig, ratio_fig, amt_heat_fig,
 
 @callback(
     Output("save-comparison-btn", "children"),
+    Output("download-comparison-txt", "data"),
     Input("save-comparison-btn", "n_clicks"),
     State("comparison-textbox", "value"),
+    State("comparison-date-selector", "value"),
     prevent_initial_call=True
 )
-def save_comparison(n_clicks, comparison_text):
+def save_comparison(n_clicks, comparison_text, selected_dates):
     """
-    Save comparison text (currently just updates button text)
+    Export comparison text as a .txt file download.
 
     Args:
         n_clicks: Number of times button clicked
         comparison_text: Text from comparison textbox
+        selected_dates: Currently selected dates (used for filename)
 
     Returns:
-        str: Updated button text
+        tuple: (button_label, dcc.send_string download)
     """
-    return "Comparison Saved!" if n_clicks else "Save Comparison"
+    if not n_clicks:
+        return "Save Comparison", None
+
+    date_suffix = ""
+    if selected_dates and len(selected_dates) == 2:
+        date_suffix = "_" + "_vs_".join(sorted(selected_dates))
+
+    filename = f"comparison_analysis{date_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    content = comparison_text or ""
+    return "Downloaded!", dcc.send_string(content, filename=filename)

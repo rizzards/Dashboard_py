@@ -5,7 +5,7 @@ Creates stacked bar charts for Income analysis (Original vs Corrected)
 import plotly.graph_objects as go
 import pandas as pd
 
-from shared.formatters import format_number, format_hover_value
+from shared.formatters import format_number, format_hover_value, format_period
 
 
 def create_tool_income_chart(sample_data, tool_sample, division_filter, item_filter, function_filter, year_range):
@@ -58,29 +58,29 @@ def create_tool_income_chart(sample_data, tool_sample, division_filter, item_fil
     # Create stacked bar chart
     fig = go.Figure()
 
-    # Format dates for hover
-    hover_dates = [pd.to_datetime(str(m)).strftime('%b-%Y') for m in merged['month']]
+    # Format dates for display
+    formatted_dates = [format_period(m) for m in merged['month']]
 
     fig.add_trace(go.Bar(
-        x=merged['month'],
+        x=formatted_dates,
         y=merged['Income_total'],
         name='Income Total (Original)',
-        marker_color='#718096',  # Gray medium for baseline
+        marker_color='#718096',
         text=[format_number(v) for v in merged['Income_total']],
         textposition='inside',
-        customdata=list(zip(hover_dates, [format_hover_value(v) for v in merged['Income_total']])),
-        hovertemplate='<b>%{customdata[0]}</b><br>Income Total (Original)<br>Value: %{customdata[1]}<extra></extra>'
+        customdata=[format_hover_value(v) for v in merged['Income_total']],
+        hovertemplate='<b>%{x}</b><br>Income Total (Original)<br>Value: %{customdata}<extra></extra>'
     ))
 
     fig.add_trace(go.Bar(
-        x=merged['month'],
+        x=formatted_dates,
         y=merged['Income_corr'],
         name='Income Correction',
-        marker_color='#E53E3E',  # Red for emphasis
+        marker_color='#E53E3E',
         text=[format_number(v) for v in merged['Income_corr']],
         textposition='inside',
-        customdata=list(zip(hover_dates, [format_hover_value(v) for v in merged['Income_corr']])),
-        hovertemplate='<b>%{customdata[0]}</b><br>Income Correction<br>Value: %{customdata[1]}<extra></extra>'
+        customdata=[format_hover_value(v) for v in merged['Income_corr']],
+        hovertemplate='<b>%{x}</b><br>Income Correction<br>Value: %{customdata}<extra></extra>'
     ))
 
     # Format y-axis
@@ -103,8 +103,8 @@ def create_tool_income_chart(sample_data, tool_sample, division_filter, item_fil
         template="plotly_white",
         height=500,
         showlegend=True,
-        margin=dict(l=50, r=50, t=60, b=50)
+        margin=dict(l=50, r=50, t=60, b=50),
+        xaxis=dict(type='category', tickangle=45)
     )
-    fig.update_xaxes(tickangle=45)
 
     return fig

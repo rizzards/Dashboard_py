@@ -1,7 +1,25 @@
 """
 Formatting utilities for Dashboard_py
-Handles number and value formatting for display and hover text
+Handles number, value, and date formatting for display and hover text
 """
+import pandas as pd
+
+
+# Standard date format used across all charts (e.g., "Apr-2023")
+DATE_FORMAT = '%b-%Y'
+
+
+def format_period(period_str):
+    """
+    Convert a period string (e.g., '2023-04') to the standard display format (e.g., 'Apr-2023')
+
+    Args:
+        period_str: Period string in 'YYYY-MM' format
+
+    Returns:
+        Formatted date string in DATE_FORMAT
+    """
+    return pd.to_datetime(str(period_str)).strftime(DATE_FORMAT)
 
 def format_number(value):
     """

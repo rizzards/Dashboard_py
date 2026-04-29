@@ -121,6 +121,53 @@ def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old
     if filter_var != "none" and filter_values:
         text_parts.append(f"Analysis filtered by {filter_var}: {', '.join(filter_values)}.\n\n")
 
+    # --- TYPE CONTRIBUTIONS TO TOTAL (shown first) ---
+    _income_raw = ['Income_1', 'Income_2', 'Income_3']
+    _amount_raw = ['Amount_1', 'Amount_2', 'Amount_3']
+    if (not df1.empty and not df2.empty and
+            all(c in df1.columns for c in _income_raw + _amount_raw)):
+        inc_tot_old = df1['Income_total'].sum() if 'Income_total' in df1.columns else df1[_income_raw].sum().sum()
+        inc_tot_new = df2['Income_total'].sum() if 'Income_total' in df2.columns else df2[_income_raw].sum().sum()
+        amt_tot_old = df1['Amount_total'].sum() if 'Amount_total' in df1.columns else df1[_amount_raw].sum().sum()
+        amt_tot_new = df2['Amount_total'].sum() if 'Amount_total' in df2.columns else df2[_amount_raw].sum().sum()
+
+        text_parts.append("TYPE CONTRIBUTIONS TO TOTAL:\n" + "=" * 30 + "\n\n")
+        text_parts.append(f"Income Contributions (% of Total Income — {format_number(inc_tot_old)} → {format_number(inc_tot_new)}):\n")
+        for col in _income_raw:
+            label = col.replace('_', ' ')
+            val_old = df1[col].sum()
+            val_new = df2[col].sum()
+            pct_old = (val_old / inc_tot_old * 100) if inc_tot_old != 0 else 0
+            pct_new = (val_new / inc_tot_new * 100) if inc_tot_new != 0 else 0
+            text_parts.append(f"• {label}: {format_number(val_old)} ({pct_old:.1f}%) → {format_number(val_new)} ({pct_new:.1f}%)\n")
+        text_parts.append("\n")
+
+        text_parts.append(f"Amount Contributions (% of Total Amount — {format_number(amt_tot_old)} → {format_number(amt_tot_new)}):\n")
+        for col in _amount_raw:
+            label = col.replace('_', ' ')
+            val_old = df1[col].sum()
+            val_new = df2[col].sum()
+            pct_old = (val_old / amt_tot_old * 100) if amt_tot_old != 0 else 0
+            pct_new = (val_new / amt_tot_new * 100) if amt_tot_new != 0 else 0
+            text_parts.append(f"• {label}: {format_number(val_old)} ({pct_old:.1f}%) → {format_number(val_new)} ({pct_new:.1f}%)\n")
+        text_parts.append("\n")
+
+        text_parts.append("Return Ratio by Type (Income/Amount):\n")
+        for inc_col, amt_col, lbl in [('Income_1', 'Amount_1', 'Type 1'),
+                                       ('Income_2', 'Amount_2', 'Type 2'),
+                                       ('Income_3', 'Amount_3', 'Type 3')]:
+            i_old = df1[inc_col].sum()
+            i_new = df2[inc_col].sum()
+            a_old = df1[amt_col].sum()
+            a_new = df2[amt_col].sum()
+            r_old = (i_old / a_old) if a_old != 0 else 0
+            r_new = (i_new / a_new) if a_new != 0 else 0
+            chg = r_new - r_old
+            direction = "improved" if chg > 0 else "declined" if chg < 0 else "stable"
+            text_parts.append(f"• {lbl}: {r_old:.4f} → {r_new:.4f} ({direction}, {chg:+.4f})\n")
+        text_parts.append("\n")
+    # -------------------------------------------------
+
     text_parts.append(create_change_sentence(f"Amount ({selected_type})", amount_old, amount_new, date1, date2) + "\n\n")
     text_parts.append(create_change_sentence(f"Income ({selected_type})", income_old, income_new, date1, date2) + "\n\n")
 
@@ -134,6 +181,59 @@ def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old
         text_parts.append(f"The Return Ratio (Income/Amount) improved from {ratio_old:.2f} to {ratio_new:.2f}, representing an increase of {ratio_change:.2f}.\n\n")
     else:
         text_parts.append(f"The Return Ratio (Income/Amount) declined from {ratio_old:.2f} to {ratio_new:.2f}, representing a decrease of {abs(ratio_change):.2f}.\n\n")
+
+    # Income Type Contribution Breakdown (Income_1, Income_2, Income_3)
+    income_type_cols = ['Income_1', 'Income_2', 'Income_3']
+    if all(col in df1.columns for col in income_type_cols) and not df1.empty and not df2.empty:
+        text_parts.append("INCOME TYPE CONTRIBUTION BREAKDOWN:\n" + "=" * 30 + "\n\n")
+
+        inc_totals_old = {col: df1[col].sum() for col in income_type_cols}
+        inc_totals_new = {col: df2[col].sum() for col in income_type_cols}
+        inc_total_old = sum(inc_totals_old.values())
+        inc_total_new = sum(inc_totals_new.values())
+
+        for col in income_type_cols:
+            label = col.replace('_', ' ')
+            val_old = inc_totals_old[col]
+            val_new = inc_totals_new[col]
+            pct_old = (val_old / inc_total_old * 100) if inc_total_old != 0 else 0
+            pct_new = (val_new / inc_total_new * 100) if inc_total_new != 0 else 0
+            val_change = val_new - val_old
+            pct_change = ((val_change / val_old) * 100) if val_old != 0 else (100 if val_new > 0 else 0)
+            change_desc = "increased" if val_change > 0 else "decreased" if val_change < 0 else "unchanged"
+            text_parts.append(
+                f"• {label}: {format_number(val_old)} ({pct_old:.1f}% of total) → {format_number(val_new)} ({pct_new:.1f}% of total) "
+                f"— {change_desc} by {abs(pct_change):.1f}%\n"
+            )
+        text_parts.append("\n")
+
+        # Income Type Contribution by Segment Detail (group_var)
+        analysis_group = group_var if group_var != "none" else "Function"
+        if analysis_group in df1.columns and analysis_group in df2.columns:
+            text_parts.append(f"INCOME TYPE CONTRIBUTION BY {analysis_group.upper()}:\n" + "=" * 30 + "\n\n")
+
+            all_segments = sorted(set(df1[analysis_group].unique()) | set(df2[analysis_group].unique()))
+            for segment in all_segments:
+                seg_df1 = df1[df1[analysis_group] == segment]
+                seg_df2 = df2[df2[analysis_group] == segment]
+                text_parts.append(f"{segment}:\n")
+
+                for col in income_type_cols:
+                    label = col.replace('_', ' ')
+                    val_old = seg_df1[col].sum() if not seg_df1.empty else 0
+                    val_new = seg_df2[col].sum() if not seg_df2.empty else 0
+                    seg_total_old = sum(seg_df1[c].sum() for c in income_type_cols) if not seg_df1.empty else 0
+                    seg_total_new = sum(seg_df2[c].sum() for c in income_type_cols) if not seg_df2.empty else 0
+                    pct_old = (val_old / seg_total_old * 100) if seg_total_old != 0 else 0
+                    pct_new = (val_new / seg_total_new * 100) if seg_total_new != 0 else 0
+                    val_change = val_new - val_old
+                    pct_change = ((val_change / val_old) * 100) if val_old != 0 else (100 if val_new > 0 else 0)
+                    change_desc = "increased" if val_change > 0 else "decreased" if val_change < 0 else "unchanged"
+                    text_parts.append(
+                        f"  • {label}: {format_number(val_old)} ({pct_old:.1f}%) → {format_number(val_new)} ({pct_new:.1f}%) "
+                        f"— {change_desc} by {abs(pct_change):.1f}%\n"
+                    )
+                text_parts.append("\n")
 
     # Determine which grouping variable to analyze (default to Item if none selected)
     analysis_group_var = group_var if group_var != "none" else "Function"
@@ -357,5 +457,5 @@ def generate_enhanced_comparison_text_updated(amount_old, amount_new, income_old
         # Silently skip if type breakdown data not available
         pass
 
-    text_parts.extend(["SUMMARY:\n", "=" * 30 + "\n", "• [Add your key insights here]\n", "• [Note any significant patterns]\n", "• [Record actionable findings]"])
+
     return "".join(text_parts)

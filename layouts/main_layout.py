@@ -37,7 +37,13 @@ def create_app_layout():
                             justify="space-between",
                             h="100%",
                             children=[
-                                dmc.Title("Dashboard", order=3, c="blue"),
+                                dmc.Group(gap="xs", align="center", children=[
+                                    html.Img(
+                                        src="/assets/logo.svg",
+                                        style={"height": "32px", "display": "block"}
+                                    ),
+                                    dmc.Title("Analytics Dashboard", order=3, c="blue"),
+                                ]),
                                 dmc.Text(
                                     f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
                                     size="sm",

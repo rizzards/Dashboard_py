@@ -7,13 +7,11 @@ and provides professional financial insights without hallucinating numbers.
 Includes caching for improved performance.
 """
 
-from openai import AzureOpenAI
 import os
 import hashlib
 import json
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Tuple
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
 
 class FinancialAnalystLLM:
@@ -30,8 +28,8 @@ class FinancialAnalystLLM:
 
     def __init__(
         self,
-        api_version: str = "2024-02-15-preview",
-        deployment_name: str = "gpt-4o",
+        api_version: str = "2025-01-01-preview",
+        deployment_name: str = "gpt-5.1",
         enable_cache: bool = True
     ):
         """
@@ -44,6 +42,16 @@ class FinancialAnalystLLM:
 
         Note: Uses Azure AD authentication. Requires AZURE_OPENAI_ENDPOINT environment variable.
         """
+        # Defer heavy imports so a missing package doesn't break callback registration at startup
+        try:
+            from openai import AzureOpenAI
+            from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+        except ImportError as e:
+            raise ImportError(
+                f"LLM dependencies not installed: {e}. "
+                "Run: pip install openai>=1.0.0 azure-identity>=1.15.0"
+            ) from e
+
         self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         self.api_version = api_version
         self.deployment_name = deployment_name

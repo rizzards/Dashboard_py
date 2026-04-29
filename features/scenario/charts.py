@@ -8,6 +8,7 @@ import pandas as pd
 
 from config import get_color_sequence
 from config_macro import PREDICTION_CHART_CONFIG
+from shared.formatters import format_period
 
 
 def create_scenario_weight_chart(scenw_sample, year_range):
@@ -53,6 +54,8 @@ def create_scenario_weight_chart(scenw_sample, year_range):
         colors = get_color_sequence('stacked', len(unique_scenarios))
 
         # Add traces for each scenario
+        formatted_dates = [format_period(m) for m in pivot_df.index]
+
         for i, scenario in enumerate(unique_scenarios):
             if scenario in pivot_df.columns:
                 weights = pivot_df[scenario]
@@ -60,20 +63,16 @@ def create_scenario_weight_chart(scenw_sample, year_range):
                 # Convert to percentage (multiply by 100)
                 weight_pct = weights * 100
 
-                # Format dates for hover
-                hover_dates = [pd.to_datetime(str(m)).strftime('%b-%Y') for m in pivot_df.index]
-
                 fig.add_trace(go.Bar(
-                    x=pivot_df.index,
+                    x=formatted_dates,
                     y=weight_pct,
                     name=scenario,
                     marker_color=colors[i],
                     text=[f"{w:.1f}%" if w > 2 else "" for w in weight_pct],
                     textposition='inside',
                     textfont=dict(color='white', size=10),
-                    customdata=list(zip(hover_dates, weight_pct)),
-                    hovertemplate='<b>%{customdata[0]}</b><br>' + f'{scenario}<br>' +
-                                 'Weight: %{customdata[1]:.2f}%<extra></extra>'
+                    hovertemplate='<b>%{x}</b><br>' + f'{scenario}<br>' +
+                                 'Weight: %{y:.2f}%<extra></extra>'
                 ))
 
         fig.update_layout(

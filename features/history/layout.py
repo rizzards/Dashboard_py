@@ -64,7 +64,14 @@ def create_history_layout():
                     # Entity, Division, Stack, Group Controls
                     dmc.Grid([
                         dmc.GridCol(span=3, children=[
-                            dmc.Text("Entity:", size="sm", fw=500, mb=5),
+                            dmc.Group([
+                                dmc.Text("Entity:", size="sm", fw=500),
+                                dmc.Tooltip(
+                                    label="Select a specific entity to scope all charts. Choosing 'All' keeps all entities combined.",
+                                    position="top", withArrow=True, w=260, multiline=True,
+                                    children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                                )
+                            ], gap=4, mb=5),
                             dmc.Select(
                                 id="entity-selector",
                                 placeholder="Select entity",
@@ -78,21 +85,31 @@ def create_history_layout():
                             )
                         ]),
                         dmc.GridCol(span=3, children=[
-                            dmc.Text("Division:", size="sm", fw=500, mb=5),
+                            dmc.Group([
+                                dmc.Text("Division:", size="sm", fw=500),
+                                dmc.Tooltip(
+                                    label="Available divisions depend on the Entity selected. Select 'All' to include all divisions for that entity.",
+                                    position="top", withArrow=True, w=260, multiline=True,
+                                    children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                                )
+                            ], gap=4, mb=5),
                             dmc.Select(
                                 id="division-selector",
                                 placeholder="Select division",
                                 value="All",
                                 size="sm",
-                                data=[{"value": "All", "label": "All"}] + [
-                                    {"value": val, "label": val}
-                                    for val in sorted(sample_data['Division'].unique())
-                                    if val != "All"
-                                ]
+                                data=[{"value": "All", "label": "All"}]
                             )
                         ]),
                         dmc.GridCol(span=3, children=[
-                            dmc.Text("Stack by:", size="sm", fw=500, mb=5),
+                            dmc.Group([
+                                dmc.Text("Stack by:", size="sm", fw=500),
+                                dmc.Tooltip(
+                                    label="Stacks the bar charts by this dimension. Do not use the same variable as 'Group by'.",
+                                    position="top", withArrow=True, w=260, multiline=True,
+                                    children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                                )
+                            ], gap=4, mb=5),
                             dmc.Select(
                                 id="stack-selector",
                                 placeholder="Select stack variable",
@@ -107,7 +124,14 @@ def create_history_layout():
                             )
                         ]),
                         dmc.GridCol(span=3, children=[
-                            dmc.Text("Group by:", size="sm", fw=500, mb=5),
+                            dmc.Group([
+                                dmc.Text("Group by:", size="sm", fw=500),
+                                dmc.Tooltip(
+                                    label="Groups the time-series charts by this dimension. Do not use the same variable as 'Stack by'.",
+                                    position="top", withArrow=True, w=280, multiline=True,
+                                    children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                                )
+                            ], gap=4, mb=5),
                             dmc.Select(
                                 id="group-selector",
                                 placeholder="Select group variable",
@@ -126,7 +150,14 @@ def create_history_layout():
                     # Filter Controls
                     dmc.Grid([
                         dmc.GridCol(span=6, children=[
-                            dmc.Text("Filter by:", size="sm", fw=500, mb=5),
+                            dmc.Group([
+                                dmc.Text("Filter by:", size="sm", fw=500),
+                                dmc.Tooltip(
+                                    label="Restricts all data to specific values of the chosen dimension. Then select the exact values in 'Filter values'.",
+                                    position="top", withArrow=True, w=280, multiline=True,
+                                    children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                                )
+                            ], gap=4, mb=5),
                             dmc.Select(
                                 id="filter-selector",
                                 placeholder="Select filter",
@@ -141,7 +172,14 @@ def create_history_layout():
                             )
                         ]),
                         dmc.GridCol(span=6, children=[
-                            dmc.Text("Filter values:", size="sm", fw=500, mb=5),
+                            dmc.Group([
+                                dmc.Text("Filter values:", size="sm", fw=500),
+                                dmc.Tooltip(
+                                    label="Enabled only after selecting a 'Filter by' dimension. Multiple values can be selected.",
+                                    position="top", withArrow=True, w=260, multiline=True,
+                                    children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                                )
+                            ], gap=4, mb=5),
                             dmc.MultiSelect(
                                 id="filter-values-selector",
                                 placeholder="Select values",

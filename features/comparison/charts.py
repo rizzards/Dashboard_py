@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 from config import get_color_sequence
-from shared.formatters import format_number, format_hover_value
+from shared.formatters import format_number, format_hover_value, format_period
 from features.comparison.logic import prepare_type_breakdown_data
 
 
@@ -61,7 +61,7 @@ def create_comparison_heatmap(df1, df2, variable, date1, date2, group_var, selec
         return fig
 
     sorted_groups = sorted(all_groups)
-    dates = [date1.strftime('%Y-%m'), date2.strftime('%Y-%m')]
+    dates = [date1.strftime('%b-%Y'), date2.strftime('%b-%Y')]
 
     # Create matrix for heatmap
     z_matrix = []
@@ -89,7 +89,8 @@ def create_comparison_heatmap(df1, df2, variable, date1, date2, group_var, selec
         yaxis_title=group_var,
         template="plotly_white",
         height=max(350, len(sorted_groups) * 25),
-        margin=dict(l=120, r=50, t=80, b=50)
+        margin=dict(l=120, r=50, t=80, b=50),
+        xaxis=dict(type='category')
     )
     return fig
 
@@ -145,7 +146,7 @@ def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, s
         fig = go.Figure()
         fig.add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5,
             xanchor='center', yanchor='middle', showarrow=False, font=dict(size=14, color="gray"))
-        fig.update_layout(title=f"{var_label} Proportions by {group_var} - {selected_type}", template="plotly_white", height=350)
+        fig.update_layout(title=f"{var_label} Share by {group_var} - {selected_type}", template="plotly_white", height=350)
         return fig
 
     fig = go.Figure()
@@ -160,22 +161,24 @@ def create_dumbbell_chart_updated(df1, df2, variable, date1, date2, group_var, s
             showlegend=False, hoverinfo='skip'))
         fig.add_trace(go.Scatter(x=[prop1], y=[i], mode='markers',
             marker=dict(size=size1, color='lightgray', line=dict(width=2, color='gray')),
-            name=f"{date1.strftime('%Y-%m')}", legendgroup="date1", showlegend=(i == 0),
-            hovertemplate=f"<b>{group}</b><br>Month: {date1.strftime('%Y-%m')}<br>Proportion: {prop1:.1f}%<br>Amount: {format_number(val1)}<extra></extra>"))
+            name=f"{date1.strftime('%b-%Y')}", legendgroup="date1", showlegend=(i == 0),
+            hovertemplate=f"<b>{group}</b><br>Month: {date1.strftime('%b-%Y')}<br>Proportion: {prop1:.1f}%<br>Amount: {format_number(val1)}<extra></extra>"))
         fig.add_trace(go.Scatter(x=[prop2], y=[i], mode='markers',
             marker=dict(size=size2, color='lightcoral', line=dict(width=2, color='red')),
-            name=f"{date2.strftime('%Y-%m')}", legendgroup="date2", showlegend=(i == 0),
-            hovertemplate=f"<b>{group}</b><br>Month: {date2.strftime('%Y-%m')}<br>Proportion: {prop2:.1f}%<br>Amount: {format_number(val2)}<extra></extra>"))
+            name=f"{date2.strftime('%b-%Y')}", legendgroup="date2", showlegend=(i == 0),
+            hovertemplate=f"<b>{group}</b><br>Month: {date2.strftime('%b-%Y')}<br>Proportion: {prop2:.1f}%<br>Amount: {format_number(val2)}<extra></extra>"))
 
-    fig.update_layout(title=f"{var_label} Proportions by {group_var} - {selected_type}", xaxis_title="Proportion (%)",
-        yaxis=dict(tickmode='array', tickvals=list(range(len(all_groups))), ticktext=list(sorted(all_groups)), title=group_var),
+    fig.update_layout(title=f"{var_label} Share by {group_var} - {selected_type}", xaxis_title="Proportion (%)",
+        yaxis=dict(tickmode='array', tickvals=list(range(len(all_groups))), ticktext=list(sorted(all_groups)), title=group_var, autorange='reversed'),
         template="plotly_white", height=350, showlegend=True, margin=dict(l=100, r=50, t=80, b=50))
     return fig
 
 
-def create_division_stacked_chart(df1, df2, variable, var_label, date1, date2, selected_type, division_filter, entity_filter, filter_var, filter_values, df):
+def create_division_stacked_chart(df1, df2, variable, var_label, date1, date2, selected_type, division_filter, entity_filter, filter_var, filter_values, df, group_var="none"):
     """
-    Create a stacked bar chart showing division percentage contribution
+    Create a stacked bar chart showing division percentage contribution.
+    When group_var is active, the x-axis shows one pair of date bars per group value,
+    each bar still stacked by Division.
 
     Args:
         df1: DataFrame for first date (filtered)
@@ -190,26 +193,23 @@ def create_division_stacked_chart(df1, df2, variable, var_label, date1, date2, s
         filter_var: Additional filter variable
         filter_values: Additional filter values
         df: Full DataFrame with all data
+        group_var: Variable to group x-axis by (default "none")
 
     Returns:
         plotly.graph_objects.Figure: Stacked bar chart
     """
     # If division filter is set to "All", use dataset filtered to exclude "All" divisions
     if division_filter == "All":
-        # Create fresh filtered datasets excluding Division == "All"
         df_temp1 = df[(df['date'].dt.to_period('M') == date1.to_period('M'))]
         df_temp2 = df[(df['date'].dt.to_period('M') == date2.to_period('M'))]
 
-        # Apply Entity filter
         if entity_filter != "All":
             df_temp1 = df_temp1[df_temp1['Entity'] == entity_filter]
             df_temp2 = df_temp2[df_temp2['Entity'] == entity_filter]
 
-        # Filter to exclude "All" divisions
         df_temp1 = df_temp1[df_temp1['Division'] != "All"]
         df_temp2 = df_temp2[df_temp2['Division'] != "All"]
 
-        # Apply other filters
         if filter_var != "none" and filter_var in df.columns and filter_values:
             df_temp1 = df_temp1[df_temp1[filter_var].isin(filter_values)]
             df_temp2 = df_temp2[df_temp2[filter_var].isin(filter_values)]
@@ -223,33 +223,56 @@ def create_division_stacked_chart(df1, df2, variable, var_label, date1, date2, s
         fig.update_layout(title=f"{var_label} by Division", template="plotly_white", height=350)
         return fig
 
-    fig = go.Figure()
-    date_labels = [date1.strftime('%Y-%m'), date2.strftime('%Y-%m')]
+    d1_label = date1.strftime('%b-%Y')
+    d2_label = date2.strftime('%b-%Y')
 
-    div1 = df1.groupby('Division')[variable].sum()
-    total1 = div1.sum()
-    pct1 = (div1 / total1 * 100) if total1 > 0 else pd.Series(dtype=float)
+    # Build (x_label, df_subset) pairs — one per date, or one per group+date
+    if group_var != "none" and group_var in df1.columns and group_var in df2.columns:
+        all_groups = sorted(set(df1[group_var].unique()) | set(df2[group_var].unique()))
+        x_pairs = []
+        for grp in all_groups:
+            x_pairs.append((f"{grp} | {d1_label}", df1[df1[group_var] == grp]))
+            x_pairs.append((f"{grp} | {d2_label}", df2[df2[group_var] == grp]))
+        xaxis_title = f"{group_var} / Month"
+        chart_height = max(350, len(all_groups) * 60)
+    else:
+        x_pairs = [(d1_label, df1), (d2_label, df2)]
+        xaxis_title = "Month"
+        chart_height = 350
 
-    div2 = df2.groupby('Division')[variable].sum()
-    total2 = div2.sum()
-    pct2 = (div2 / total2 * 100) if total2 > 0 else pd.Series(dtype=float)
-
+    # Collect all divisions across all subsets
     all_divisions = set()
-    if not pct1.empty: all_divisions.update(pct1.index)
-    if not pct2.empty: all_divisions.update(pct2.index)
-
+    for _, subset in x_pairs:
+        all_divisions.update(subset['Division'].unique())
     sorted_divisions = sorted(all_divisions)
     colors = get_color_sequence('stacked', len(sorted_divisions))
-    for i, division in enumerate(sorted_divisions):
-        p1, p2 = pct1.get(division, 0), pct2.get(division, 0)
-        fig.add_trace(go.Bar(x=date_labels, y=[p1, p2], name=division,
-            marker_color=colors[i],
-            text=[f"{p1:.1f}%", f"{p2:.1f}%"], textposition='inside',
-            hovertemplate='<b>%{x}</b><br>' + f'{division}<br>' + 'Percentage: %{y:.1f}%<extra></extra>'))
 
-    fig.update_layout(title=f"{var_label} Percentage Contribution by Division - {selected_type}",
-        xaxis_title="Month", yaxis_title="Percentage (%)", barmode='stack', template="plotly_white",
-        height=350, showlegend=True, yaxis=dict(range=[0, 100]))
+    fig = go.Figure()
+    x_labels = [label for label, _ in x_pairs]
+
+    for i, division in enumerate(sorted_divisions):
+        y_vals = []
+        text_vals = []
+        for _, subset in x_pairs:
+            div_sum = subset[subset['Division'] == division][variable].sum() if not subset.empty else 0
+            total = subset[variable].sum() if not subset.empty else 0
+            pct = (div_sum / total * 100) if total > 0 else 0
+            y_vals.append(pct)
+            text_vals.append(f"{pct:.1f}%")
+
+        fig.add_trace(go.Bar(
+            x=x_labels, y=y_vals, name=division,
+            marker_color=colors[i],
+            text=text_vals, textposition='inside',
+            hovertemplate='<b>%{x}</b><br>' + f'{division}<br>' + 'Percentage: %{y:.1f}%<extra></extra>'
+        ))
+
+    fig.update_layout(
+        title=f"{var_label} Percentage Contribution by Division - {selected_type}",
+        xaxis_title=xaxis_title, yaxis_title="Percentage (%)", barmode='stack',
+        template="plotly_white", height=chart_height, showlegend=True,
+        yaxis=dict(range=[0, 100]), xaxis=dict(type='category')
+    )
     return fig
 
 
@@ -270,7 +293,7 @@ def create_type2_breakdown_charts(date1, date2, filter_var, filter_values, group
     """
     type_df1, type_df2, type_group_cols = prepare_type_breakdown_data(date1, date2, filter_var, filter_values, group_var)
 
-    date_labels = [date1.strftime('%Y-%m'), date2.strftime('%Y-%m')]
+    date_labels = [date1.strftime('%b-%Y'), date2.strftime('%b-%Y')]
 
     if type_df1 is None or type_df2 is None:
         # Return empty figures if data not available
@@ -360,7 +383,8 @@ def create_type2_breakdown_charts(date1, date2, filter_var, filter_values, group
         template="plotly_white",
         height=350,
         showlegend=True,
-        yaxis=dict(range=[0, 100], ticksuffix="%")
+        yaxis=dict(range=[0, 100], ticksuffix="%"),
+        xaxis=dict(type='category')
     )
 
     # Income breakdown chart (same logic as amount)
@@ -440,7 +464,8 @@ def create_type2_breakdown_charts(date1, date2, filter_var, filter_values, group
         template="plotly_white",
         height=350,
         showlegend=True,
-        yaxis=dict(range=[0, 100], ticksuffix="%")
+        yaxis=dict(range=[0, 100], ticksuffix="%"),
+        xaxis=dict(type='category')
     )
 
     return fig_amount, fig_income
@@ -560,14 +585,14 @@ def create_ratio_comparison_chart(df1, df2, amount_col, income_col, date1, date2
         ratio_data_date2 = groups_date2.set_index(group_var)['ratio'].reindex(all_groups, fill_value=0)
 
         ratio_comparison_fig.add_trace(go.Bar(
-            y=all_groups, x=ratio_data_date1, name=date1.strftime('%Y-%m'),
+            y=all_groups, x=ratio_data_date1, name=date1.strftime('%b-%Y'),
             orientation='h', marker_color='lightgray',
             text=[f"{v:.1f}%" for v in ratio_data_date1],
             textposition='auto',
             hovertemplate='<b>%{y}</b><br>Ratio: %{x:.2f}%<extra></extra>'
         ))
         ratio_comparison_fig.add_trace(go.Bar(
-            y=all_groups, x=ratio_data_date2, name=date2.strftime('%Y-%m'),
+            y=all_groups, x=ratio_data_date2, name=date2.strftime('%b-%Y'),
             orientation='h', marker_color='lightcoral',
             text=[f"{v:.1f}%" for v in ratio_data_date2],
             textposition='auto',
@@ -581,29 +606,32 @@ def create_ratio_comparison_chart(df1, df2, amount_col, income_col, date1, date2
             template="plotly_white",
             height=max(400, len(all_groups) * 40),
             barmode='group',
-            showlegend=True
+            showlegend=True,
+            yaxis=dict(type='category')
         )
     else:
-        # Simple ratio comparison (no grouping)
+        # Simple ratio comparison (no grouping) — horizontal bar, consistent with grouped view
         ratio_old = (income_old / amount_old * 100) if amount_old != 0 else 0
         ratio_new = (income_new / amount_new * 100) if amount_new != 0 else 0
 
         ratio_comparison_fig.add_trace(go.Bar(
-            x=[date1.strftime('%Y-%m'), date2.strftime('%Y-%m')],
-            y=[ratio_old, ratio_new],
+            y=[date1.strftime('%b-%Y'), date2.strftime('%b-%Y')],
+            x=[ratio_old, ratio_new],
+            orientation='h',
             marker_color=['lightgray', 'lightcoral'],
             text=[f"{ratio_old:.2f}%", f"{ratio_new:.2f}%"],
             textposition='auto',
-            hovertemplate='<b>%{x}</b><br>Ratio: %{y:.2f}%<extra></extra>'
+            hovertemplate='<b>%{y}</b><br>Ratio: %{x:.2f}%<extra></extra>'
         ))
 
         ratio_comparison_fig.update_layout(
             title=f"Return Ratio Comparison - {selected_type}",
-            xaxis_title="Date",
-            yaxis_title="Ratio (%)",
+            xaxis_title="Ratio (%)",
+            yaxis_title="Date",
             template="plotly_white",
             height=400,
-            showlegend=False
+            showlegend=False,
+            yaxis=dict(type='category')
         )
 
     return ratio_comparison_fig

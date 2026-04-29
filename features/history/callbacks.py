@@ -14,6 +14,27 @@ from shared.formatters import format_number
 from features.history.charts import create_bar_chart, create_ratio_chart, create_income_diff_chart
 
 
+# Entity → Division valid combinations (same mapping as comparison tab)
+ENTITY_DIVISION_MAP = {
+    "All": ["All"],
+    "EU":  ["All", "France", "Stockholm"],
+}
+
+
+@callback(
+    Output("division-selector", "data"),
+    Output("division-selector", "value"),
+    Input("entity-selector", "value"),
+    State("division-selector", "value"),
+)
+def constrain_history_division_by_entity(entity, current_division):
+    """Restrict Division options to those valid for the selected Entity."""
+    allowed = ENTITY_DIVISION_MAP.get(entity, ["All"])
+    options = [{"value": d, "label": d} for d in allowed]
+    new_value = current_division if current_division in allowed else "All"
+    return options, new_value
+
+
 @callback(
     [Output("filter-values-selector", "data"),
      Output("filter-values-selector", "disabled"),
@@ -149,7 +170,7 @@ def update_barcharts(selected_type, entity_filter, division_filter, filter_var,
     # Create charts
     amount_chart = create_bar_chart(df, amount_col, f"Amount - {selected_type}", stack_var, group_var)
     income_chart = create_bar_chart(df, income_col, f"Income - {selected_type}", stack_var, group_var)
-    income_diff_chart = create_income_diff_chart(df, income_col, selected_type)
+    income_diff_chart = create_income_diff_chart(df, income_col, selected_type, stack_var, group_var)
     ratio_chart = create_ratio_chart(df, amount_col, income_col, group_var, selected_type)
 
     return summary_boxes, amount_chart, income_chart, income_diff_chart, ratio_chart

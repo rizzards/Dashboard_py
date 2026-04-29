@@ -17,6 +17,9 @@ def create_comparison_layout():
         dmc.Stack: Comparison tab layout with all controls, filters, and charts
     """
     return dmc.Stack([
+        # Store for base comparison text (without LLM) — read by the textbox callback
+        dcc.Store(id="comparison-analysis-store"),
+
         # Comparison Controls Card
         dmc.Card([
             dmc.CardSection([
@@ -69,7 +72,14 @@ def create_comparison_layout():
                 # Entity, Division, Stack, Group Filters
                 dmc.Grid([
                     dmc.GridCol(span=3, children=[
-                        dmc.Text("Entity:", size="sm", fw=500, mb=5),
+                        dmc.Group([
+                            dmc.Text("Entity:", size="sm", fw=500),
+                            dmc.Tooltip(
+                                label="Select a specific entity to scope all charts. Choosing 'All' keeps all entities combined.",
+                                position="top", withArrow=True, w=260, multiline=True,
+                                children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                            )
+                        ], gap=4, mb=5),
                         dmc.Select(
                             id="comparison-entity-selector",
                             placeholder="Select entity",
@@ -80,18 +90,31 @@ def create_comparison_layout():
                         )
                     ]),
                     dmc.GridCol(span=3, children=[
-                        dmc.Text("Division:", size="sm", fw=500, mb=5),
+                        dmc.Group([
+                            dmc.Text("Division:", size="sm", fw=500),
+                            dmc.Tooltip(
+                                label="Available divisions depend on the Entity selected. Select 'All' to include all divisions for that entity.",
+                                position="top", withArrow=True, w=260, multiline=True,
+                                children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                            )
+                        ], gap=4, mb=5),
                         dmc.Select(
                             id="comparison-division-selector",
                             placeholder="Select division",
                             value="All",
                             size="sm",
-                            data=[{"value": "All", "label": "All"}] +
-                                [{"value": val, "label": val} for val in sorted(sample_data['Division'].unique()) if val != "All"]
+                            data=[{"value": "All", "label": "All"}]
                         )
                     ]),
                     dmc.GridCol(span=3, children=[
-                        dmc.Text("Stack by:", size="sm", fw=500, mb=5),
+                        dmc.Group([
+                            dmc.Text("Stack by:", size="sm", fw=500),
+                            dmc.Tooltip(
+                                label="Stacks the bar charts by this dimension. Do not use the same variable as 'Group by'.",
+                                position="top", withArrow=True, w=260, multiline=True,
+                                children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                            )
+                        ], gap=4, mb=5),
                         dmc.Select(
                             id="comparison-stack-selector",
                             placeholder="Select stack variable",
@@ -106,7 +129,14 @@ def create_comparison_layout():
                         )
                     ]),
                     dmc.GridCol(span=3, children=[
-                        dmc.Text("Group by:", size="sm", fw=500, mb=5),
+                        dmc.Group([
+                            dmc.Text("Group by:", size="sm", fw=500),
+                            dmc.Tooltip(
+                                label="Groups dumbbell and heatmap charts, and drives the comparison text analysis. Do not use the same variable as 'Stack by'.",
+                                position="top", withArrow=True, w=280, multiline=True,
+                                children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                            )
+                        ], gap=4, mb=5),
                         dmc.Select(
                             id="comparison-group-selector",
                             placeholder="Select group variable",
@@ -125,7 +155,14 @@ def create_comparison_layout():
                 # Additional Filters
                 dmc.Grid([
                     dmc.GridCol(span=6, children=[
-                        dmc.Text("Filter by:", size="sm", fw=500, mb=5),
+                        dmc.Group([
+                            dmc.Text("Filter by:", size="sm", fw=500),
+                            dmc.Tooltip(
+                                label="Restricts all data to specific values of the chosen dimension. Then select the exact values in 'Filter values'.",
+                                position="top", withArrow=True, w=280, multiline=True,
+                                children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                            )
+                        ], gap=4, mb=5),
                         dmc.Select(
                             id="comparison-filter-selector",
                             placeholder="Select filter",
@@ -140,7 +177,14 @@ def create_comparison_layout():
                         )
                     ]),
                     dmc.GridCol(span=6, children=[
-                        dmc.Text("Filter values:", size="sm", fw=500, mb=5),
+                        dmc.Group([
+                            dmc.Text("Filter values:", size="sm", fw=500),
+                            dmc.Tooltip(
+                                label="Enabled only after selecting a 'Filter by' dimension. Multiple values can be selected.",
+                                position="top", withArrow=True, w=260, multiline=True,
+                                children=DashIconify(icon="material-symbols:info-outline", width=14, color="gray")
+                            )
+                        ], gap=4, mb=5),
                         dmc.MultiSelect(
                             id="comparison-filter-values-selector",
                             placeholder="Select values",
@@ -167,13 +211,26 @@ def create_comparison_layout():
                         description="Enable LLM-powered analysis (requires Azure OpenAI setup)"
                     )
                 ], mb="sm"),
-                dmc.Textarea(
-                    id="comparison-textbox",
-                    placeholder="Enter your comparison analysis notes here...",
-                    autosize=True,
-                    minRows=8,
-                    maxRows=15,
-                    value="Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis\n• Monitor value changes and ratios\n• Identify significant trends between periods"
+                dcc.Loading(
+                    id="llm-loading",
+                    type="dot",
+                    color="#228be6",
+                    children=[
+                        dmc.Textarea(
+                            id="comparison-textbox",
+                            placeholder="Enter your comparison analysis notes here...",
+                            autosize=True,
+                            minRows=8,
+                            maxRows=20,
+                            value="Comparison Analysis:\n\n• Select exactly 2 dates to compare data\n• Use filters and grouping to focus analysis\n• Monitor value changes and ratios\n• Identify significant trends between periods"
+                        ),
+                        dmc.Text(
+                            id="llm-status-text",
+                            size="xs",
+                            c="dimmed",
+                            mt=4
+                        )
+                    ]
                 )
             ], withBorder=True, inheritPadding=True, py="xs"),
             dmc.CardSection([
@@ -183,7 +240,8 @@ def create_comparison_layout():
                     variant="filled",
                     size="sm",
                     fullWidth=True
-                )
+                ),
+                dcc.Download(id="download-comparison-txt")
             ], inheritPadding=True, pt="xs")
         ], withBorder=True, shadow="sm", radius="md", mb="md"),
 

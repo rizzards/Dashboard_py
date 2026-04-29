@@ -4,3 +4,8 @@ CLAUDE.md
 verify_migration.py
 *.txt
 !requirements.txt
+
+# Python bytecode — auto-generated, never commit
+__pycache__/
+*.pyc
+*.pyo
